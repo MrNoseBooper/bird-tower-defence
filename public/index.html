@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tyrant's Nest</title>
+  <link id="favicon" rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jersey+10&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="title" class="screen">
+    <img id="logo" class="pixel" alt="An Eastern Kingbird">
+    <h1>Tyrant's Nest</h1>
+    <p class="tag">Eastern Kingbirds are small, fierce and fearless. Defend their nest from every reptile on Earth.</p>
+    <div class="menu">
+      <button id="btn-continue" class="primary">Continue</button>
+      <button id="btn-play" class="primary">Play</button>
+      <button id="btn-roost">The Roost</button>
+    </div>
+    <p class="feathers"><img class="pixel icon" data-icon="feather" alt=""> <span id="t-feathers">0</span> feathers</p>
+    <div id="cloud-box" class="cloud" hidden>
+      <p>Cloud save code: <b id="t-code"></b>. Enter it on another device to keep playing there.</p>
+      <form id="code-form"><input id="code-in" maxlength="32" placeholder="Save code" aria-label="Save code"> <button>Load</button></form>
+      <p id="code-msg" class="small" role="status"></p>
+    </div>
+    <p id="t-store" class="small"></p>
+  </main>
+
+  <main id="levels" class="screen" hidden>
+    <h2>Choose a level</h2>
+    <div id="level-list" class="levels"></div>
+    <button data-back>Back</button>
+  </main>
+
+  <main id="roost" class="screen" hidden>
+    <h2>The Roost</h2>
+    <p>Permanent upgrades for every game. Earn feathers by surviving rounds and beating levels.</p>
+    <p class="feathers"><img class="pixel icon" data-icon="feather" alt=""> <span id="r-feathers">0</span> feathers</p>
+    <div id="roost-list" class="roost"></div>
+    <button data-back>Back</button>
+  </main>
+
+  <main id="game" class="screen" hidden>
+    <div id="board-wrap">
+      <canvas id="board" class="pixel" width="480" height="270"></canvas>
+      <div id="bossbar" hidden><span id="boss-name"></span><div class="bar"><div id="boss-fill"></div></div></div>
+      <div id="toasts" aria-live="polite"></div>
+    </div>
+    <aside id="side">
+      <div class="stats">
+        <span title="Berries"><img class="pixel icon" data-icon="berry" alt="Berries"> <b id="s-cash"></b></span>
+        <span title="Eggs"><img class="pixel icon" data-icon="egg" alt="Eggs"> <b id="s-eggs"></b></span>
+        <span id="s-round"></span>
+      </div>
+      <div id="shop"></div>
+      <div id="info"></div>
+      <div class="controls">
+        <button id="btn-go" class="primary">Start round</button>
+        <button id="btn-speed">Speed 1x</button>
+        <button id="btn-menu">Menu</button>
+      </div>
+    </aside>
+  </main>
+
+  <div id="modal" hidden>
+    <div class="box" role="dialog" aria-modal="true" aria-labelledby="m-title">
+      <h2 id="m-title"></h2>
+      <p id="m-text"></p>
+      <div id="m-buttons" class="menu"></div>
+    </div>
+  </div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
