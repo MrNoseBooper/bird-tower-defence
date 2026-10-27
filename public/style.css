@@ -118,6 +118,17 @@ h3 { font-size: 24px; }
 #boss-fill { height: 100%; background: var(--red); }
 #toasts { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); width: min(80%, 560px); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
 .toast { background: var(--paper); border: 3px solid var(--ink); box-shadow: 0 3px 0 var(--ink); padding: 6px 10px; font-size: 18px; animation: pop 0.25s ease-out; }
+#banner {
+  position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0;
+  font-size: clamp(40px, 7vw, 88px); color: var(--gold); white-space: nowrap;
+  text-shadow: 4px 0 var(--ink), -4px 0 var(--ink), 0 4px var(--ink), 0 -4px var(--ink), 0 9px 0 #c0672b;
+}
+#banner.show { animation: banner 1.6s ease-out; }
+@keyframes banner {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  15%, 75% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
+}
 @keyframes pop { from { transform: translateY(8px); opacity: 0; } }
 
 #modal { position: fixed; inset: 0; background: rgba(42, 28, 18, 0.45); display: grid; place-items: center; padding: 16px; }
@@ -126,6 +137,8 @@ h3 { font-size: 24px; }
 
 @media (prefers-reduced-motion: reduce) {
   #title img.cloud, #logo, .toast, #modal .box { animation: none; }
+  #banner.show { animation: banner-fade 1.6s linear; }
+  @keyframes banner-fade { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
 }
 
 @media (max-width: 860px) {

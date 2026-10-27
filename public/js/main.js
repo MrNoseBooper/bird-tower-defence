@@ -20,7 +20,8 @@ const KINDS = Object.keys(TOWERS);
 const board = $('#board'), ctx = board.getContext('2d'), parade = $('#parade').getContext('2d');
 ctx.imageSmoothingEnabled = false;
 const ui = { placing: null, sel: null, mx: 0, my: 0, hover: false, built: null, last: [0, 'campaign'] };
-let save = loadLocal(), game = null, paused = false, acc = 0, lastFrame = 0;
+let save = loadLocal(), game = null, paused = false, acc = 0, lastFrame = 0, wait = 0;
+const AUTO_START = 10; // seconds between rounds before the next one starts on its own
 
 // ---- screens
 
@@ -85,6 +86,7 @@ function enter(g) {
   game = g;
   paused = false;
   acc = 0;
+  wait = 0;
   Object.assign(ui, { placing: null, sel: null, built: null, last: [g.mapIndex, g.mode] });
   buildShop();
   fit();
@@ -259,6 +261,7 @@ function hud() {
   setText($('#s-eggs'), game.eggs);
   setText($('#s-round'), game.mode === 'campaign' ? `Round ${game.round}/${game.map.rounds}` : `Round ${game.round} · endless`);
   $('#btn-go').disabled = game.active || !!game.over;
+  setText($('#btn-go'), game.active ? 'Round on' : `Start round (${Math.ceil(AUTO_START - wait)})`);
   setText($('#btn-speed'), `Speed ${game.speed}x`);
   const boss = game.enemies.find(e => e.def.boss);
   $('#bossbar').hidden = !boss;
@@ -305,12 +308,24 @@ board.addEventListener('pointerdown', e => {
 
 addEventListener('keydown', e => {
   if (!game || !$('#modal').hidden || e.target.closest('input')) return;
-  if (e.code === 'Space') { e.preventDefault(); sim.startRound(game); }
+  if (e.code === 'Space') { e.preventDefault(); go(); }
   else if (e.key === 'Escape') { ui.placing = null; ui.sel = null; }
   else if (e.key >= '1' && e.key <= String(KINDS.length)) choose(KINDS[e.key - 1]);
 });
 
-$('#btn-go').onclick = () => sim.startRound(game);
+$('#btn-go').onclick = go;
+
+// Start the next round and flash its number across the board.
+function go() {
+  if (!sim.startRound(game)) return;
+  wait = 0;
+  const b = $('#banner');
+  b.textContent = game.round === game.map.rounds && game.mode === 'campaign' ? `Final round ${game.round}!` : `Round ${game.round}`;
+  b.hidden = false;
+  b.classList.remove('show');
+  void b.offsetWidth; // restart the animation
+  b.classList.add('show');
+}
 $('#btn-speed').onclick = () => { game.speed = game.speed % 3 + 1; };
 $('#btn-menu').onclick = () => {
   if (game.over) return;
@@ -345,6 +360,7 @@ function frame(now) {
     return;
   }
   if (!paused) for (acc += dt * game.speed; acc >= sim.DT; acc -= sim.DT) sim.step(game);
+  if (!paused && !game.active && !game.over && $('#modal').hidden && (wait += dt * game.speed) >= AUTO_START) go();
   draw(ctx, game, ui);
   handleEvents();
   if (game) hud();
