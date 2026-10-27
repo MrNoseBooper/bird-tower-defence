@@ -91,7 +91,8 @@ const BIRD_FLAP = [
 // 0 idle, 1 breathing in (head and body up a pixel, feet planted), 2 wings up
 const POSES = [BIRD, [...BIRD.slice(1, 13), BIRD[12], ...BIRD.slice(13)], BIRD_FLAP];
 const BIRD_PAL = { k: '#16161d', d: '#3c4250', g: '#5d6576', l: '#a3adbf', w: '#ffffff', s: '#cfd6e2', e: '#e9ecf2' };
-const SCARF = { hawker: '#ff9a2e', quill: '#3da5ff', bomber: '#b25cff', lookout: '#ffcc33', shade: '#5fd04a', orchard: '#ff7eb6', nestegg: '#f2b520', scavenger: '#d9965a' };
+const SCARF = { hawker: '#ff9a2e', quill: '#3da5ff', bomber: '#b25cff', mobber: '#ff6b6b', screecher: '#2ee6d6', lookout: '#ffcc33', shade: '#5fd04a',
+  flasher: '#ff2e63', rain: '#5b8cff', orchard: '#ff7eb6', scavenger: '#d9965a', nestegg: '#f2b520', taxman: '#2ecc71', ranch: '#c8763a' };
 const WOOD = ['#6e4420', '#a46b33', '#d29a55'];
 export const LEAF = ['#3a8f3a', '#52b448', '#86dd66'];
 
@@ -156,6 +157,48 @@ const PROPS = {
     front(g) {
       blob(g, 19, 21, 3, 3, ['#a07a45', '#e0b673', '#f7dca0']);
       rect(g, 18, 17, 3, 1, '#6e4420'); px(g, 19, 21, '#4fd15f'); px(g, 20, 22, '#4fd15f'); px(g, 18, 22, '#36a845');
+    },
+  },
+  mobber: {
+    back(g, f) {
+      post(g);
+      // two young kingbirds riding along, bobbing
+      for (const [x, y] of [[5, 15 + f], [19, 16 - f]]) { rect(g, x, y, 2, 1, BIRD_PAL.k); rect(g, x, y + 1, 2, 1, BIRD_PAL.w); px(g, x - 1, y + 1, BIRD_PAL.d); }
+    },
+  },
+  screecher: {
+    back: post,
+    front(g, f) {
+      // sound waves coming off the beak, pulsing
+      for (let k = 0; k <= f; k++) { const x = 20 + k * 2; px(g, x, 5, '#2ee6d6'); rect(g, x + 1, 6, 1, 3, '#2ee6d6'); px(g, x, 9, '#2ee6d6'); }
+    },
+  },
+  flasher: {
+    back(g) {
+      rect(g, 6, 18, 13, 2, '#9b45d6'); rect(g, 6, 20, 13, 1, '#6a2fa0'); px(g, 8, 18, '#d39be8');
+      rect(g, 10, 21, 4, 4, '#ffcc33'); rect(g, 13, 21, 1, 4, '#d9a21e'); rect(g, 8, 25, 8, 1, 'rgba(0,0,0,0.2)');
+    },
+  },
+  rain: {
+    back(g, f) {
+      post(g);
+      blob(g, 6, 4, 5, 3, ['#b9c6d8', '#e6eef7', '#ffffff']);
+      for (let k = 0; k < 3; k++) px(g, 3 + k * 3, 8 + ((k + f) % 2) * 2, '#3da5ff'); // falling drops
+    },
+  },
+  taxman: {
+    back: post,
+    front(g, f) {
+      rect(g, 15, 19, 7, 5, '#a46b33'); rect(g, 15, 19, 7, 1, '#d29a55'); rect(g, 15, 23, 7, 1, '#6e4420');
+      rect(g, 17, 16, 3, 3, '#ffcc33'); px(g, 18, 17, '#a35a00'); if (f) px(g, 19, 16, '#ffffff');
+    },
+  },
+  ranch: {
+    back(g, f) {
+      rect(g, 2, 21, 20, 4, '#a46b33'); rect(g, 2, 21, 20, 1, '#7a4b26');
+      for (const x of [2, 8, 14, 20]) rect(g, x, 18, 1, 6, '#6e4420');
+      rect(g, 2, 19, 19, 1, '#d29a55');
+      px(g, 5 + f, 23, '#ff3b4f'); px(g, 12 - f, 22, '#4fd15f'); px(g, 17 + f, 23, '#ffd23f'); // bugs scurrying
     },
   },
 };
@@ -261,7 +304,10 @@ const SHAPES = {
       { 2: '..441111111111111111111111', 3: '44..1333333333333331w1w1w1', 5: '......22.......22.........' }],
   },
 };
+// bosses: the same shapes at double size
 SHAPES.bigcroc = { ...SHAPES.croc, k: 2 };
+SHAPES.biglizard2 = { ...SHAPES.biglizard, k: 2 };
+SHAPES.bigturtle2 = { ...SHAPES.bigturtle, k: 2 };
 
 const PALS = {
   anole: { 1: '#6fe04a', 2: '#2f8f2a', 3: '#c8ff8a', 4: '#6fe04a' },
@@ -280,6 +326,18 @@ const PALS = {
   tortoise: { 1: '#a8946a', 2: '#5e5038', 3: '#c0b08a', 4: '#d8c690' },
   croc: { 1: '#6a9a44', 2: '#3a5f2c', 3: '#d8dc94', 4: '#6a9a44', e: '#ffd23f' },
   gator: { 1: '#4a5f46', 2: '#243024', 3: '#b8bd90', 4: '#4a5f46', e: '#ffc030' },
+  gecko: { 1: '#f2c14e', 2: '#b07a2a', 3: '#fff0b0', 4: '#ff8c42' },
+  thorny: { 1: '#e0903f', 2: '#8a4a1c', 3: '#f6cc90', 4: '#6a3510' },
+  horned: { 1: '#d2b07e', 2: '#7a5c3a', 3: '#f2e4c4', 4: '#9a7a50' },
+  frilled: { 1: '#c27c4e', 2: '#7a4422', 3: '#ffd0a0', 4: '#ff5a36' },
+  draco: { 1: '#7fcf5a', 2: '#3f7a2a', 3: '#e0f7b8', 4: '#ffb347' },
+  worm: { 1: '#f0a0a8', 2: '#b8646e', 3: '#ffd6da', 4: '#d07884' },
+  chuck: { 1: '#44444c', 2: '#1e1e24', 3: '#a8a8b2', 4: '#ff8c42' },
+  cobra: { 1: '#6a5640', 2: '#2e241c', 3: '#ecdcb4', 4: '#c8a060' },
+  caiman: { 1: '#8a9a62', 2: '#4a5634', 3: '#dadcae', 4: '#8a9a62', e: '#ffd23f' },
+  tuatara: { 1: '#9a9f62', 2: '#4a4d2c', 3: '#e2e2b0', 4: '#f0e8a8', e: '#ffd23f' },
+  komodo: { 1: '#8a7a66', 2: '#3e3428', 3: '#d2c2a8', 4: '#5e4e3c', e: '#ffd23f' },
+  leather: { 1: '#46566a', 2: '#1e2630', 3: '#b4c4d4', 4: '#e0e8f0' },
 };
 export const bodyColor = id => PALS[REPTILES[id].pal][1];
 

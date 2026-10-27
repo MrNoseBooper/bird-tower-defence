@@ -99,11 +99,11 @@ function shimmer(g, s, th) {
 }
 
 // A tower's look this frame: breathing, blinking, wings up while it works, and its prop's own animation.
-const PROP_RATE = { lookout: 3, shade: 1.2, orchard: 1.5, nestegg: 0.8 };
+const PROP_RATE = { lookout: 3, shade: 1.2, orchard: 1.5, nestegg: 0.8, mobber: 2, screecher: 4, rain: 3, taxman: 1, ranch: 2 };
 function towerLook(t, time, extra = {}) {
   const clock = time + t.id * 0.77, busy = t.anim > 0, rate = PROP_RATE[t.kind];
   return {
-    crowned: Math.max(...t.tiers) >= 3,
+    crowned: Math.max(...t.tiers) >= 3 || (t.kind === 'flasher' && busy),
     // the Lookout looks around; attackers face their target
     left: t.kind === 'lookout' && !busy ? Math.floor(clock / 2.2) % 2 === 1 : t.face < 0,
     pose: busy ? 2 : Math.floor(clock * 1.6) % 2,
@@ -131,9 +131,13 @@ function tower(g, s, t) {
   // new towers drop in from above
   const age = s.time - (t.born ?? -1), drop = age < 0.3 ? -12 * (1 - age / 0.3) ** 2 : 0;
   drawParts(g, towerParts(t.kind, towerLook(t, s.time)), t.x, t.y + drop, bx, by);
-  if (t.stun > 0) for (let i = 0; i < 3; i++) {
-    const a = s.time * 8 + i * 2.1;
-    px(g, Math.round(t.x + Math.cos(a) * 6), Math.round(t.y - 22 + Math.sin(a) * 2), '#ffe14a');
+  if (t.stun > 0) stars(g, t.x, t.y - 22, s.time);
+}
+
+function stars(g, x, y, time, r = 6) {
+  for (let i = 0; i < 3; i++) {
+    const a = time * 8 + i * 2.1;
+    px(g, Math.round(x + Math.cos(a) * r), Math.round(y + Math.sin(a) * 2), '#ffe14a');
   }
 }
 
@@ -142,6 +146,13 @@ function reptile(g, s, e) {
   // feet keep pace with the ground: the frame comes from distance walked, and the body bobs on passing steps
   let img = frames[f];
   const x = Math.round(e.x - img.width / 2), y = Math.round(e.y - img.height + 3 - (e.dead > 0 ? 0 : f % 2));
+  if (e.hidden) {
+    // burrowers show a moving mound of dirt; divers just a ripple and their eyes
+    const hx = Math.round(e.x), hy = Math.round(e.y);
+    if (e.def.burrow) { rect(g, hx - 3, hy, 7, 1, '#7a4b26'); rect(g, hx - 2, hy - 1, 5, 1, '#a46b33'); px(g, hx - 1 + f % 3, hy - 2, '#a46b33'); }
+    else { rect(g, hx - 5, hy, 11, 1, 'rgba(255,255,255,0.5)'); px(g, hx - 2, hy - 1, '#ffd23f'); px(g, hx + 2, hy - 1, '#ffd23f'); }
+    return;
+  }
   shadow(g, e.x, e.y + 2, img.width * 0.35);
   if (s.time - e.hitAt < 0.06) img = white(img);
   g.globalAlpha = e.def.camo ? 0.4 + 0.15 * Math.sin(s.time * 4 + e.uid) : 1;
@@ -161,6 +172,9 @@ function reptile(g, s, e) {
   }
   if (e.shaded) { px(g, x + img.width - 1, y - 2, '#3a8f3a'); px(g, x + img.width, y - 3, '#86dd66'); }
   if (e.jamT > 0) { px(g, x - 1, y - 2, '#b25cff'); px(g, x - 1, y - 1, '#e6b8ff'); }
+  if (e.puffT > 0) { rect(g, x + 1, y - 2, 3, 1, '#b9c6d8'); px(g, x + 2, y - 3, '#ffffff'); }
+  if (e.scareT > 0) { rect(g, Math.round(e.x), y - 7, 1, 3, '#ff2e63'); px(g, Math.round(e.x), y - 3, '#ff2e63'); }
+  if (e.stunT > 0) stars(g, e.x, y - 3, s.time, 4);
 }
 
 function nest(g, s) {
@@ -210,6 +224,35 @@ function effect(g, f) {
         star(g, Math.round(f.x + Math.cos(a) * 12 * p), Math.round(f.y + Math.sin(a) * 9 * p), i % 2 ? 1 : 2, '#ffffff', '#ffcc33');
       }
       break;
+    case 'mob':
+      ring(g, f.x, f.y, f.r * (0.5 + 0.5 * p), 'rgba(255,107,107,0.12)', '#ff9a8a');
+      for (let i = 0; i < 4; i++) {
+        // little kingbirds swooping out
+        const a = i * Math.PI / 2 + p * 2, bx = Math.round(f.x + Math.cos(a) * f.r * p), by = Math.round(f.y + Math.sin(a) * f.r * 0.6 * p);
+        rect(g, bx, by, 2, 1, '#16161d');
+        px(g, bx, by + 1, '#ffffff');
+      }
+      break;
+    case 'zap':
+      g.strokeStyle = '#2ee6d6';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(Math.round(f.pts[0][0]) + 0.5, Math.round(f.pts[0][1]) + 0.5);
+      // a jagged line: every other corner nudged sideways
+      f.pts.slice(1).forEach(([zx, zy], i) => g.lineTo(Math.round(zx) + 0.5 + (i % 2 ? 1 : -1), Math.round(zy) + 0.5));
+      g.stroke();
+      for (const [zx, zy] of f.pts.slice(1)) star(g, Math.round(zx), Math.round(zy), 1, '#ffffff', '#2ee6d6');
+      break;
+    case 'flash': ring(g, f.x, f.y, Math.max(1, f.r * p), 'rgba(255,46,99,0.15)', '#ff2e63'); star(g, x, y, 2, '#ffffff', '#ff2e63'); break;
+    case 'spit':
+      for (let i = 0; i < 4; i++) {
+        const q = Math.min(1, p * 1.5 + i * 0.08);
+        px(g, Math.round(f.x0 + (f.x1 - f.x0) * q), Math.round(f.y0 + (f.y1 - f.y0) * q), '#7dff5a');
+      }
+      break;
+    case 'squirt': burst(g, f, 10, '#ff3b4f', f.r * 0.7, p); break;
+    case 'glide': for (let i = 1; i <= 6; i++) px(g, x - i * 2, y + (i % 2), '#ffffff'); break;
+    case 'coin': rect(g, x - 1, Math.round(y - p * 6), 2, 2, '#ffcc33'); px(g, x - 1, Math.round(y - p * 6), '#fff5b8'); break;
     case 'heal': number(g, '+', x - 1, Math.round(y - p * 6), '#7dff7a'); break;
     case 'text': {
       const ty = Math.round(y - p * 10), tx = Math.round(x - f.n.length * 2);
@@ -241,6 +284,11 @@ export function draw(g, s, ui) {
     px(g, x, y - 2, '#4fd15f');
   }
   for (const f of s.fx) effect(g, f);
+  if (s.rainT > 0) {
+    // a Rain Caller's shower over the whole map
+    rect(g, 0, 0, W, H, 'rgba(60,110,180,0.1)');
+    for (let i = 0; i < 70; i++) rect(g, Math.floor((i * 37 + s.time * 30) % W), Math.floor((i * 53 + s.time * 170) % H), 1, 3, 'rgba(200,230,255,0.75)');
+  }
   insects(g, s.time, s.map.seed, W, H);
   if (ui.placing && ui.hover) {
     const ok = canPlace(s, ui.placing, ui.mx, ui.my) && s.cash >= price(s, TOWERS[ui.placing].cost);

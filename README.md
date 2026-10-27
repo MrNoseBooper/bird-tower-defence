@@ -2,9 +2,11 @@
 
 A Bloons-style pixel tower defence. Eastern Kingbirds defend their nest from every reptile on Earth.
 
-- 8 kingbird towers in 3 roles (attack, support, financial). Each has 2 upgrade paths of 3 tiers, and only one path can reach tier 3.
-- 18 reptiles, each with its own health and ability: camouflage, shells, playing dead, healing, rattles that stun towers, and bosses that release more reptiles.
+- 14 kingbird towers in 3 roles (attack, support, financial). Each has 2 upgrade paths of 3 tiers, and only one path can reach tier 3.
+- New towers unlock with XP. Every round you clear earns XP, and more on later maps.
+- 30 reptiles, each with its own health and ability: camouflage, shells, burrowing, puffing up, venom that stuns towers, frills that slow them, and 6 bosses.
 - 4 levels that unlock in order, plus an endless mode on every unlocked map.
+- Balance is checked by `tests/bot.mjs`, a bot that plays the whole campaign from scratch and must beat each level within 3 tries.
 - Feathers earned in play buy permanent upgrades in The Roost.
 - Saving: the run saves at the start of every round, and progress is kept in the browser plus a server copy.
 
@@ -20,7 +22,7 @@ This opens http://localhost:8000. Saves are also written to `saves/save.json`. U
 
 ```
 python -m unittest discover tests     # backend: saves, input checks, serving the game
-node tests/sim.test.mjs               # game rules, plus a bot that must beat level 1
+node tests/sim.test.mjs               # game rules, plus the campaign balance bot
 ```
 
 ## Deploy to Vercel

@@ -34,6 +34,8 @@ function renderTitle() {
   $('#btn-continue').hidden = !save.run;
   setText($('#t-feathers'), save.profile.feathers);
   setText($('#t-code'), save.code);
+  const xp = save.profile.xp, next = KINDS.map(k => TOWERS[k]).filter(t => t.unlock > xp).sort((a, b) => a.unlock - b.unlock)[0];
+  setText($('#t-xp'), `${xp} XP · ${next ? `next kingbird: ${next.name} at ${next.unlock} XP` : 'every kingbird unlocked!'}`);
 }
 
 function renderLevels() {
@@ -149,6 +151,10 @@ function lose() {
 function handleEvents() {
   for (const ev of game.events.splice(0)) {
     if (ev.type === 'new') toast(`New reptile: ${REPTILES[ev.id].name}. ${REPTILES[ev.id].note}`, 8000);
+    else if (ev.type === 'unlock') {
+      toast(`New kingbird unlocked: ${TOWERS[ev.kind].name}! ${TOWERS[ev.kind].desc}`, 8000);
+      buildShop();
+    }
     else if (ev.type === 'round') {
       toast(`Round ${ev.round} cleared: +${ev.bonus} berries${ev.interest ? `, +${ev.interest} interest` : ''}${ev.eggs ? `, +${ev.eggs} eggs` : ''}`);
       if (!game.over) saveRun();
@@ -180,7 +186,7 @@ function buildShop() {
     for (const kind of KINDS.filter(k => TOWERS[k].role === role)) {
       const t = TOWERS[kind], b = el('button', 'tw');
       b.dataset.kind = kind;
-      b.title = sim.unlocked(game, kind) ? `${t.desc} (key ${KINDS.indexOf(kind) + 1})` : `Beat ${MAPS[t.unlock - 1].name} to unlock.`;
+      b.title = sim.unlocked(game, kind) ? `${t.desc} (key ${KINDS.indexOf(kind) + 1})` : `Unlocks at ${t.unlock} XP. Every round you clear earns XP.`;
       b.append(image(towerIcon(kind)), el('span', 'nm', t.name), el('span', 'cost'));
       b.onclick = () => choose(kind);
       grid.append(b);
@@ -198,7 +204,7 @@ function choose(kind) {
 function updateShop() {
   for (const b of document.querySelectorAll('#shop .tw')) {
     const kind = b.dataset.kind, open = sim.unlocked(game, kind), cost = sim.price(game, TOWERS[kind].cost);
-    setText(b.querySelector('.cost'), open ? cost : 'Locked');
+    setText(b.querySelector('.cost'), open ? cost : `${TOWERS[kind].unlock} XP`);
     b.disabled = !open;
     b.classList.toggle('poor', open && game.cash < cost);
     b.classList.toggle('active', ui.placing === kind);

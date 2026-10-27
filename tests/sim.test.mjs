@@ -1,69 +1,29 @@
-// Headless checks of the game rules. Run: node tests/sim.test.mjs
+// Headless checks of the game rules, plus a balance check: a bot plays the whole campaign.
+// Run: node tests/sim.test.mjs
 import assert from 'node:assert/strict';
 import { TOWERS, REPTILES, MAPS } from '../public/js/data.js';
 import * as sim from '../public/js/sim.js';
+import { normalize } from '../public/js/save.js';
+import { spots, closest, play, roost } from './bot.mjs';
 
-const profile = () => ({ feathers: 0, beaten: 9, best: {}, wins: {}, roost: {} });
+const profile = (xp = 9999) => ({ feathers: 0, xp, beaten: 0, best: {}, wins: {}, roost: {} });
 
-// Free building spots, best view of the trail first.
-function spots(s, kind = 'hawker') {
-  const pts = s.layout.paths.flatMap(p => Array.from({ length: Math.ceil(p.len / 6) }, (_, i) => sim.posAt(p, i * 6)));
-  const out = [];
-  for (let y = 18; y <= sim.H - 6; y += 6) for (let x = 8; x <= sim.W - 8; x += 6)
-    if (sim.canPlace(s, kind, x, y)) out.push({ x, y, near: pts.filter(([px, py]) => (px - x) ** 2 + (py - y) ** 2 < 46 * 46).length });
-  return out.sort((a, b) => b.near - a.near);
-}
-
-// A deliberately simple player: follows a fixed build order, saving up for each step.
-// 'up' buys the cheapest next upgrade, with each tower upgraded in a guide-like order (path indexes).
-const PLAN = ['hawker', 'hawker', 'up', 'up', 'quill', 'up', 'up', 'orchard', 'hawker', 'up', 'up', 'lookout', 'up', 'quill', 'up', 'up',
-  'scavenger', 'hawker', 'up', 'quill', 'up', 'bomber', 'up', 'up', 'shade', 'up', 'hawker', 'quill', 'up', 'bomber'];
-const ORDER = { hawker: [1, 0, 1, 0, 0], quill: [0, 0, 1, 1, 0], bomber: [0, 1, 0, 1, 0], lookout: [0, 0, 1, 1, 0],
-  shade: [0, 1, 0, 1, 0], orchard: [0, 0, 1, 1, 0], nestegg: [0, 0, 1, 1, 0], scavenger: [0, 1, 0, 1, 0] };
-function nextPath(t) {
-  const done = [0, 0];
-  for (const p of ORDER[t.kind]) { if (done[p] < t.tiers[p]) { done[p]++; continue; } return p; }
-  return -1;
-}
-function spend(s) {
-  for (s.plan ??= 0; ;) {
-    const want = PLAN[s.plan] || 'up';
-    if (want === 'up') {
-      const [best] = s.towers.map(t => ({ t, p: nextPath(t) })).filter(({ p }) => p >= 0)
-        .map(({ t, p }) => ({ t, p, u: sim.upgradeInfo(s, t, p) })).sort((a, b) => a.u.price - b.u.price);
-      if (!best || !sim.upgrade(s, best.t, best.p)) return;
-    } else {
-      const list = spots(s, want), spot = want === 'orchard' ? list.at(-1) : list[0];
-      if (!spot || !sim.placeTower(s, want, spot.x, spot.y)) return;
-    }
-    s.plan++;
-  }
-}
-
-function play(mapIndex, mode = 'campaign', untilRound = Infinity, eggs = 0) {
-  const s = sim.newGame(mapIndex, mode, profile());
-  if (eggs) s.eggs = s.startEggs = eggs;
-  while (!s.over && s.round < untilRound) {
-    spend(s);
-    sim.startRound(s);
-    for (let i = 0; s.active && i < 60 * 600; i++) sim.step(s);
-    assert(!s.active, `round ${s.round} never ended`);
-  }
-  return s;
-}
+// ---- rules
 
 // Waves are well formed and the same every time.
-for (const map of MAPS) for (let r = 1; r <= map.rounds + 25; r++) {
+for (const map of MAPS) for (let r = 1; r <= map.rounds + 45; r++) {
   const w = sim.makeWave(map, r);
   assert(w.length && w.every(x => REPTILES[x.id]), `${map.id} round ${r}`);
   assert.deepEqual(w, sim.makeWave(map, r));
+  assert(w.filter(x => REPTILES[x.id].rare).length <= 1, 'rare reptiles come alone');
 }
 for (const map of MAPS) assert(sim.makeWave(map, map.rounds).some(x => x.id === map.boss), `${map.id} ends with its boss`);
+for (const map of MAPS) for (const [id] of map.pool) assert(REPTILES[id], `${map.id} pool has ${id}`);
 
 // Every map has room to build.
 for (const [i, map] of MAPS.entries()) assert(spots(sim.newGame(i, 'campaign', profile())).length > 100, `${map.id} has building space`);
 
-// Placement, the one-path-to-tier-3 rule, selling.
+// Placement, the one-path-to-tier-3 rule, selling, XP locks.
 {
   const s = sim.newGame(0, 'campaign', profile());
   assert(!sim.canPlace(s, 'hawker', 90, 120), 'cannot build on the trail');
@@ -78,8 +38,23 @@ for (const [i, map] of MAPS.entries()) assert(spots(sim.newGame(i, 'campaign', p
   const value = sim.sellValue(t), cash = s.cash;
   sim.sell(s, t);
   assert.equal(s.cash, cash + value);
-  assert(!sim.canPlace(sim.newGame(0, 'campaign', { ...profile(), beaten: 0 }), 'bomber', spot.x, spot.y), 'locked towers cannot be built');
+  const fresh = sim.newGame(0, 'campaign', profile(0));
+  assert(!sim.canPlace(fresh, 'bomber', spot.x, spot.y) && sim.canPlace(fresh, 'hawker', spot.x, spot.y), 'towers unlock with XP');
 }
+
+// Clearing a round earns XP and announces what it unlocks.
+{
+  const p = profile(13), s = sim.newGame(1, 'campaign', p);
+  sim.startRound(s);
+  s.queue = [];
+  sim.step(s);
+  assert.equal(p.xp, 15, 'swamp rounds give 2 XP');
+  assert(s.events.some(e => e.type === 'unlock' && e.kind === 'bomber'), 'reaching 15 XP unlocks the Berry Bomber');
+}
+
+// Old saves get XP for the rounds they already reached.
+assert.equal(normalize({ profile: { best: { meadow: 29, swamp: 3 } } }).profile.xp, 35);
+assert.equal(normalize({ profile: { xp: 7, best: { meadow: 29 } } }).profile.xp, 7);
 
 // Reptile abilities.
 {
@@ -98,17 +73,37 @@ for (const [i, map] of MAPS.entries()) assert(spots(sim.newGame(i, 'campaign', p
   assert(hog.gone, 'and really goes down the second time');
   sim.hit(s, sim.spawn(s, 'seaturtle', 0, 300), 99, {});
   assert.equal(s.enemies.filter(e => e.id === 'hatchling').length, 4, 'sea turtles release hatchlings');
+  const devil = sim.spawn(s, 'thorny', 0, 250);
+  sim.hit(s, devil, 4, { kind: 'peck' });
+  assert.equal(devil.hp, 7, 'beaks do half damage to thorny devils');
+  const chuck = sim.spawn(s, 'chuckwalla', 0, 260);
+  sim.hit(s, chuck, 5, {});
+  sim.hit(s, chuck, 5, {});
+  assert.equal(chuck.hp, 40, 'a chuckwalla puffs up after a hit');
+  const worm = sim.spawn(s, 'worm', 0, 270);
+  worm.hidden = true;
+  sim.hit(s, worm, 5, { cracks: true });
+  assert.equal(worm.hp, 18, 'buried reptiles cannot be hit');
+}
+
+// Horned lizards stun nearby towers when they die; frilled lizards slow their reloading.
+{
+  const s = sim.newGame(0, 'campaign', profile());
+  const [spot] = spots(s), t = sim.placeTower(s, 'hawker', spot.x, spot.y);
+  s.active = true;
+  const horned = sim.spawn(s, 'horned', 0, 0);
+  Object.assign(horned, { x: t.x + 10, y: t.y });
+  sim.hit(s, horned, 99, {});
+  assert(t.stun > 1, 'horned lizard squirt stuns the tower');
 }
 
 // Camouflage needs detection.
 {
   const s = sim.newGame(0, 'campaign', profile());
   const [spot] = spots(s);
-  const t = sim.placeTower(s, 'hawker', spot.x, spot.y), path = s.layout.paths[0];
-  let d = 0;
-  while (Math.hypot(sim.posAt(path, d)[0] - t.x, sim.posAt(path, d)[1] - t.y) > 30) d += 2;
+  const t = sim.placeTower(s, 'hawker', spot.x, spot.y);
   s.active = true;
-  const cham = sim.spawn(s, 'chameleon', 0, d);
+  const cham = sim.spawn(s, 'chameleon', 0, closest(s, t.x, t.y));
   cham.def = { ...cham.def, speed: 0 };
   for (let i = 0; i < 120; i++) sim.step(s);
   assert.equal(cham.hp, 5, 'plain towers cannot see camouflage');
@@ -119,7 +114,39 @@ for (const [i, map] of MAPS.entries()) assert(spots(sim.newGame(i, 'campaign', p
   assert(cham.gone || cham.hp < 5, 'Long Sally sees camouflage');
 }
 
-// Economy: round bonus, Nest Egg interest, Scale Scavenger bonus.
+// New towers: the Mobber hits everything near it, the Screecher leaps, the Crown Flasher scares, the Tax Collector taxes once.
+{
+  const s = sim.newGame(0, 'campaign', profile());
+  const [spot] = spots(s), d = closest(s, spot.x, spot.y);
+  const pack = () => [-4, 0, 4].map(k => { const e = sim.spawn(s, 'iguana', 0, d + k); e.def = { ...e.def, speed: 0 }; return e; });
+  s.active = true;
+  s.cash = 1e6;
+  const mobber = sim.placeTower(s, 'mobber', spot.x, spot.y), mobbed = pack();
+  sim.step(s);
+  assert(mobbed.every(e => e.hp < 22), 'the Mobber hits every reptile in its circle');
+  sim.sell(s, mobber);
+  s.enemies = [];
+  const screecher = sim.placeTower(s, 'screecher', spot.x, spot.y), screeched = pack();
+  sim.step(s);
+  assert(screeched.every(e => e.hp === 20), 'the screech leaps to all 3 reptiles');
+  sim.sell(s, screecher);
+  s.enemies = [];
+  const flasher = sim.placeTower(s, 'flasher', spot.x, spot.y), scared = pack()[0];
+  scared.def = REPTILES.iguana;
+  sim.step(s);
+  const before = scared.d;
+  for (let i = 0; i < 20; i++) sim.step(s);
+  assert(scared.d < before, 'scared reptiles back away');
+  sim.sell(s, flasher);
+  s.enemies = [];
+  sim.placeTower(s, 'taxman', spot.x, spot.y);
+  const payer = sim.spawn(s, 'iguana', 0, d), cash = s.cash;
+  payer.def = { ...payer.def, speed: 0 };
+  for (let i = 0; i < 30; i++) sim.step(s);
+  assert.equal(s.cash, cash + 1, 'each reptile is taxed once');
+}
+
+// Economy: round bonus, Nest Egg interest, Scale Scavenger bonus, Bug Ranch growth.
 {
   const s = sim.newGame(0, 'campaign', profile());
   s.cash = 2000;
@@ -136,28 +163,43 @@ for (const [i, map] of MAPS.entries()) assert(spots(sim.newGame(i, 'campaign', p
   sim.hit(s, e, 99, {});
   assert.equal(s.cash - cash, Math.round(12 * 1.25), 'scavenger adds 25%');
 }
+{
+  const s = sim.newGame(0, 'campaign', profile()), spot = spots(s).at(-1);
+  sim.placeTower(s, 'ranch', spot.x, spot.y);
+  const round = () => { const c = s.cash; sim.startRound(s); s.queue = []; sim.step(s); return s.cash - c - (80 + s.round); };
+  const paid = [round(), round(), round()];
+  assert(paid[0] > 0 && paid[0] < paid[1] && paid[1] < paid[2], `a Bug Ranch pays more every round (${paid})`);
+}
 
 // Saved games come back the same.
 {
-  const s = play(0, 'campaign', 5);
+  const s = play(0, 'campaign', profile(), 5);
   const copy = sim.restore(JSON.parse(JSON.stringify(sim.snapshot(s))), profile());
   assert.deepEqual(sim.snapshot(copy), sim.snapshot(s));
   assert.throws(() => sim.restore({ mapIndex: 99, towers: [] }, profile()));
 }
 
-// Whole games with the bot. The first level must be beatable by a simple strategy.
-for (const [i, map] of MAPS.entries()) {
-  const s = play(i);
-  console.log(`${map.name}: ${s.over} at round ${s.round}/${map.rounds} with ${s.towers.length} towers, ${s.eggs} eggs left`);
-  if (i === 0) assert.equal(s.over, 'win', 'the bot beats the first level');
-}
+// ---- balance: the bot plays the campaign from scratch, retrying lost levels and spending feathers in between
 
-// Endless keeps working well past the campaign.
-{
-  const t0 = performance.now();
-  const s = play(0, 'endless', 60, 1e9);
-  assert(Number.isFinite(s.cash) && s.round === 60 && !s.over);
-  console.log(`endless to round 60 in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
+const t0 = performance.now(), p = profile(0), attempts = [];
+for (const [i, map] of MAPS.entries()) {
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    const s = play(i, 'campaign', p), won = s.over === 'win';
+    p.feathers += sim.feathers(s, won) + (won ? 15 : 0); // the game adds 15 for a level's first win
+    roost(p);
+    console.log(`${map.name.padEnd(17)} try ${attempt}: ${won ? 'WON ' : 'lost'} round ${String(s.round).padStart(2)}/${map.rounds}, ` +
+      `eggs ${String(s.eggs).padStart(2)}/${s.startEggs}, ${s.towers.length} towers, xp ${p.xp}, feathers ${p.feathers}`);
+    if (won) { attempts.push(attempt); break; }
+  }
 }
+const endless = play(0, 'endless', p);
+console.log(`Endless on Homestead Meadow afterwards: lasted until round ${endless.round}. (${((performance.now() - t0) / 1000).toFixed(1)}s)`);
+const locked = Object.keys(TOWERS).filter(k => TOWERS[k].unlock > p.xp);
+console.log(`XP after the campaign: ${p.xp}${locked.length ? `, still locked: ${locked.join(', ')}` : ', every tower unlocked'}`);
+
+// Not too hard: every level falls within a few tries. Not too easy: endless eventually wins.
+assert.equal(attempts.length, MAPS.length, 'the bot beats every level');
+assert(attempts.every(n => n <= 3), `each level takes at most 3 tries (took ${attempts})`);
+assert(endless.round >= 35 && endless.round <= 90, `endless gets hard but not instantly (round ${endless.round})`);
 
 console.log('all sim checks passed');

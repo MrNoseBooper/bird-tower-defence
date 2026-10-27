@@ -3,6 +3,7 @@ import { TOWERS, REPTILES, MAPS, THEMES, DECOR_R, START, BOSSES, ENDLESS_POOL } 
 
 export const W = 480, H = 270, DT = 1 / 60, PATH_HALF = 9, TOWER_R = 8;
 export const TARGETS = ['first', 'last', 'strong', 'close'];
+export const xpPerRound = mapIndex => 1 + mapIndex; // later maps teach faster
 
 // Seeded random numbers (mulberry32) so maps and waves come out the same every time.
 export function rng(seed) {
@@ -66,7 +67,7 @@ export function newGame(mapIndex, mode, profile) {
   const map = MAPS[mapIndex];
   const s = {
     mapIndex, map, mode, profile, layout: layout(map),
-    round: 0, active: false, over: null, time: 0, speed: 1,
+    round: 0, active: false, over: null, time: 0, speed: 1, rainT: 0,
     cash: START.cash + 100 * (profile.roost.cash || 0), eggs: START.eggs + 3 * (profile.roost.eggs || 0),
     towers: [], enemies: [], shots: [], fx: [], events: [], queue: [], qt: 0,
     nextId: 1, spawned: 0, seen: {}, paid: 0, discount: 0, flat: 0, shades: [], spotters: [], scavs: [],
@@ -84,7 +85,7 @@ export function stats(t, profile) {
   }));
   const rank = profile.roost[t.kind] || 0;
   if (def.role === 'attack') { st.rate /= 1 + 0.06 * rank; st.range *= 1 + 0.03 * rank; }
-  else if (def.role === 'support') st.aura *= 1 + 0.08 * rank;
+  else if (def.role === 'support') { if (st.aura) st.aura *= 1 + 0.08 * rank; else st.rate /= 1 + 0.08 * rank; }
   else st.econ = 1 + 0.1 * rank;
   return st;
 }
@@ -92,7 +93,7 @@ export function stats(t, profile) {
 // Recompute every tower's stats and the support/financial effects; call after anything changes.
 export function refresh(s) {
   for (const t of s.towers) t.s = stats(t, s.profile);
-  const of = kind => s.towers.filter(t => t.kind === kind);
+  const of = kind => s.towers.filter(t => t.s.kind === kind);
   const lookouts = of('lookout');
   s.shades = of('shade');
   s.scavs = of('scavenger');
@@ -117,7 +118,7 @@ export function refresh(s) {
 }
 
 export const price = (s, cost) => Math.round(cost * (1 - s.discount) / 5) * 5;
-export const unlocked = (s, kind) => TOWERS[kind].unlock <= s.profile.beaten;
+export const unlocked = (s, kind) => TOWERS[kind].unlock <= (s.profile.xp || 0);
 export const canPlace = (s, kind, x, y) =>
   unlocked(s, kind) && x >= 8 && x <= W - 8 && y >= 18 && y <= H - 6 && !blockedAt(s.layout, x, y, TOWER_R, s.towers);
 
@@ -125,7 +126,7 @@ function newTower(s, kind, x, y, saved = {}) {
   if (!TOWERS[kind]) throw new Error(`unknown tower ${kind}`);
   // drops: 4 means an orchard built mid-round starts paying next round
   return { id: s.nextId++, kind, x, y, tiers: [...(saved.tiers || [0, 0])], target: saved.target || 'first', spent: saved.spent || 0,
-    cd: 0, stun: 0, anim: 0, face: 1, drops: 4, dropT: 0 };
+    age: saved.age || 0, cd: 0, stun: 0, anim: 0, face: 1, drops: 4, dropT: 0 };
 }
 
 export function placeTower(s, kind, x, y) {
@@ -166,23 +167,31 @@ export function sell(s, t) {
 
 // ---- rounds
 
+// Health budget of a round; the main difficulty curve.
+export const budget = round => 12 + 4 * round + 0.6 * round * round;
+const endlessBoss = round => {
+  const i = Math.max(0, round / 10 - 2), n = BOSSES.length;
+  return BOSSES[i < n ? i : n - 3 + (i - n) % 3]; // after the strongest, keep cycling the top three
+};
+
 export function makeWave(map, round) {
   const r = rng(map.seed * 7919 + round), endless = round > map.rounds;
   const entries = endless ? ENDLESS_POOL : map.pool, from = Object.fromEntries(entries);
   const pool = entries.filter(([, f]) => f <= round).map(([id]) => id);
-  const boss = round === map.rounds ? map.boss : endless && round % 10 === 0 ? BOSSES[Math.max(0, Math.min(3, round / 10 - 2))] : null;
-  const budget = (12 + 4 * round + 0.6 * round * round) * (boss ? 0.5 : 1), ids = [], used = {};
-  // shelled and camouflaged reptiles need specific counters, so they get at most 30% of a round
-  const special = id => REPTILES[id].shell || REPTILES[id].camo;
-  let specialLeft = budget * 0.3;
-  for (let left = budget; left > 0;) {
+  const boss = round === map.rounds ? map.boss : endless && round % 10 === 0 ? endlessBoss(round) : null;
+  const total = budget(round) * map.pressure * (boss ? 0.5 : 1), ids = [], used = {};
+  // reptiles that need specific counters get at most 30% of a round
+  const special = id => { const d = REPTILES[id]; return d.shell || d.camo || d.puff || d.dive; };
+  let specialLeft = total * 0.3;
+  for (let left = total; left > 0;) {
     // a group of one reptile type that fits the remaining health budget, favouring tougher ones;
-    // a reptile's first round is one small group so players can see it before it gets dangerous
-    const fits = pool.filter(id => REPTILES[id].hp <= (special(id) ? Math.min(left, specialLeft) : left) && !(from[id] === round && used[id]));
+    // a reptile's first round is one small group and the next two keep groups small, so new threats ramp up; rare ones come alone
+    const fits = pool.filter(id => REPTILES[id].hp <= (special(id) ? Math.min(left, specialLeft) : left) && !((from[id] === round || REPTILES[id].rare) && used[id]));
     const opts = fits.length ? fits : [pool[0]];
-    let roll = r() * opts.reduce((a, id) => a + Math.sqrt(REPTILES[id].hp), 0), id = opts[0];
-    for (const o of opts) if ((roll -= Math.sqrt(REPTILES[o].hp)) <= 0) { id = o; break; }
-    const hp = REPTILES[id].hp, cap = from[id] === round ? 4 : 3 + Math.floor(r() * 10);
+    const weight = id => Math.sqrt(REPTILES[id].hp) * (REPTILES[id].rare ? 0.1 : 1);
+    let roll = r() * opts.reduce((a, id) => a + weight(id), 0), id = opts[0];
+    for (const o of opts) if ((roll -= weight(o)) <= 0) { id = o; break; }
+    const hp = REPTILES[id].hp, cap = REPTILES[id].rare ? 1 : from[id] === round ? 4 : round - from[id] < 3 ? 6 : 3 + Math.floor(r() * 10);
     const n = Math.max(1, Math.min(Math.ceil(left / hp), cap, special(id) ? Math.floor(specialLeft / hp) : Infinity));
     for (let i = 0; i < n; i++) ids.push(id);
     used[id] = true;
@@ -190,11 +199,11 @@ export function makeWave(map, round) {
     if (special(id)) specialLeft -= n * hp;
   }
   // spread them out so health arrives at a steady rate over the round
-  const length = 18 + 1.2 * round, total = ids.reduce((a, id) => a + REPTILES[id].hp, 0);
+  const length = 18 + 1.2 * round, sum = ids.reduce((a, id) => a + REPTILES[id].hp, 0);
   let t = 0;
   const out = ids.map(id => {
     const e = { t, id };
-    t += Math.max(0.15, length * REPTILES[id].hp / total);
+    t += Math.max(0.15, length * REPTILES[id].hp / sum);
     return e;
   });
   if (boss) out.push({ t: t + 2, id: boss });
@@ -207,20 +216,22 @@ export function startRound(s) {
   s.active = true;
   s.qt = 0;
   s.queue = makeWave(s.map, s.round);
-  for (const t of s.towers) if (t.kind === 'orchard') { t.drops = 0; t.dropT = 1.5; }
+  for (const t of s.towers) if (t.s.kind === 'orchard') { t.drops = 0; t.dropT = 1.5; }
   return true;
 }
 
 export function spawn(s, id, pi, d) {
   const def = REPTILES[id], hp = def.hp * (1 + Math.max(0, s.round - 40) * 0.05); // endless gets tougher past round 40
   const [x, y, dir] = posAt(s.layout.paths[pi], d);
-  const e = { uid: s.nextId++, id, def, pi, d, x, y, dir: dir || 1, hp, max: hp, jam: 0, jamT: 0, sprint: 0, dead: 0, rt: def.rattle?.[2] ?? 0 };
+  const e = { uid: s.nextId++, id, def, pi, d, x, y, dir: dir || 1, hp, max: hp, jam: 0, jamT: 0, sprint: 0, dead: 0,
+    stunT: 0, scareT: 0, puffT: 0, dv: 0, gl: 0, lay: 0, rt: def.rattle?.[2] ?? 0, sp: def.spit?.[2] ?? 0 };
   s.enemies.push(e);
   if (!s.seen[id]) { s.seen[id] = true; s.events.push({ type: 'new', id }); }
   return e;
 }
 
-const orchardDrop = t => Math.round(t.s.income * t.s.econ / 4);
+// Bug Ranches add growth for every round they have been kept.
+const orchardDrop = t => Math.round((t.s.income + (t.s.growth || 0) * Math.min(t.age, t.s.grow || 0)) * t.s.econ / 4);
 function pay(s, t, n) {
   s.cash += n;
   t.anim = 0.3; // flaps its wings
@@ -230,10 +241,12 @@ function pay(s, t, n) {
 function endRound(s) {
   s.active = false;
   s.shots = [];
-  for (const t of s.towers) if (t.kind === 'orchard') while (t.drops < 4) { t.drops++; pay(s, t, orchardDrop(t)); }
+  for (const t of s.towers) if (t.s.kind === 'orchard') while (t.drops < 4) { t.drops++; pay(s, t, orchardDrop(t)); }
   const savings = s.cash;
   let interest = 0, eggs = 0;
-  for (const t of s.towers) if (t.kind === 'nestegg') {
+  for (const t of s.towers) {
+    t.age++;
+    if (t.s.kind !== 'nestegg') continue;
     const n = Math.floor(Math.min(t.s.cap, savings * t.s.interest) * t.s.econ);
     if (n) pay(s, t, n);
     interest += n;
@@ -243,13 +256,17 @@ function endRound(s) {
   s.cash += bonus;
   s.eggs += eggs;
   s.events.push({ type: 'round', round: s.round, bonus, interest, eggs });
+  // every cleared round earns XP, which unlocks new towers
+  const xp = s.profile.xp || 0;
+  s.profile.xp = xp + xpPerRound(s.mapIndex);
+  for (const [kind, def] of Object.entries(TOWERS)) if (def.unlock > xp && def.unlock <= s.profile.xp) s.events.push({ type: 'unlock', kind });
   if (s.mode === 'campaign' && s.round >= s.map.rounds) { s.over = 'win'; s.events.push({ type: 'win' }); }
 }
 
 // ---- combat
 
 const onMap = e => e.x >= 0 && e.x <= W && e.y >= 0 && e.y <= H;
-const targetable = (e, st) => !e.gone && !(e.dead > 0) && onMap(e) && (!e.def.camo || st.camo);
+const targetable = (e, st) => !e.gone && !(e.dead > 0) && !e.hidden && onMap(e) && (!e.def.camo || st.camo);
 
 function pickTarget(s, t) {
   let best = null, score = -Infinity;
@@ -271,13 +288,17 @@ function nearby(s, e, st, n, r) {
 }
 
 export function hit(s, e, dmg, st) {
-  if (e.gone || e.dead > 0) return;
-  if (e.def.shell && !st.cracks) { s.fx.push({ type: 'clink', x: e.x, y: e.y - 4, t: 0.15, T: 0.15 }); return; }
+  if (e.gone || e.dead > 0 || e.hidden) return;
+  if ((e.def.shell || e.puffT > 0) && !st.cracks) { s.fx.push({ type: 'clink', x: e.x, y: e.y - 4, t: 0.15, T: 0.15 }); return; }
   if (e.def.big) dmg *= 1 + (st.bigMul || 0);
+  if (e.def.spiky && (st.kind === 'peck' || st.kind === 'pulse')) dmg /= 2;
+  if (e.scareT > 0) dmg *= 1 + (e.fear || 0);
   const spot = s.spotters.find(t => dist2(t, e) <= t.s.aura ** 2);
   if (spot) dmg *= 1 + spot.s.spot;
   e.hp -= dmg;
   e.hitAt = s.time;
+  if (e.def.puff && !(e.puffT > 0)) e.puffT = e.def.puff;
+  if (st.stun && !e.def.boss) e.stunT = Math.max(e.stunT, st.stun);
   if (e.def.sprint) e.sprint = 0.6;
   if (e.def.fatTail && !e.healed && e.hp > 0 && e.hp < e.max / 2) {
     e.healed = true;
@@ -285,6 +306,10 @@ export function hit(s, e, dmg, st) {
     s.fx.push({ type: 'heal', x: e.x, y: e.y - 8, t: 0.6, T: 0.6 });
   }
   if (e.hp <= 0) kill(s, e);
+}
+
+function stunTowers(s, x, y, r, secs) {
+  for (const t of s.towers) if ((t.x - x) ** 2 + (t.y - y) ** 2 <= r * r) t.stun = Math.max(t.stun, secs);
 }
 
 function kill(s, e) {
@@ -296,6 +321,10 @@ function kill(s, e) {
   s.cash += gain;
   if (gain >= 10) s.fx.push({ type: 'text', x: e.x, y: e.y - 10, n: `+${gain}`, t: 0.9, T: 0.9 });
   s.fx.push({ type: 'poof', id: e.id, x: e.x, y: e.y, t: 0.45, T: 0.45 });
+  if (e.def.squirt) {
+    stunTowers(s, e.x, e.y, ...e.def.squirt);
+    s.fx.push({ type: 'squirt', x: e.x, y: e.y, r: e.def.squirt[0], t: 0.4, T: 0.4 });
+  }
   for (const [id, n] of e.def.spawns || []) for (let i = 0; i < n; i++) spawn(s, id, e.pi, Math.max(0, e.d - i * 5));
 }
 
@@ -319,6 +348,9 @@ function moveReptiles(s) {
   for (const e of s.enemies) {
     const def = e.def;
     if (e.dead > 0) { e.dead -= DT; continue; }
+    if (e.stunT > 0) { e.stunT -= DT; continue; }
+    if (def.dive) { const [up, down] = def.dive; e.dv += DT; e.hidden = e.dv % (up + down) > up; }
+    e.puffT -= DT;
     let slow = e.jamT > 0 ? e.jam : 0;
     e.jamT -= DT;
     e.shaded = false;
@@ -329,17 +361,77 @@ function moveReptiles(s) {
     if (def.rattle && (e.rt -= DT) <= 0) {
       const [r, stun, every] = def.rattle;
       e.rt = every;
-      for (const t of s.towers) if (dist2(t, e) <= r * r) t.stun = Math.max(t.stun, stun);
+      stunTowers(s, e.x, e.y, r, stun);
       s.fx.push({ type: 'ring', x: e.x, y: e.y, r, t: 0.4, T: 0.4 });
     }
+    if (def.spit && (e.sp -= DT) <= 0) {
+      const [r, stun, every] = def.spit;
+      e.sp = every;
+      const t = s.towers.filter(t => dist2(t, e) <= r * r).sort((a, b) => dist2(a, e) - dist2(b, e))[0];
+      if (t) {
+        t.stun = Math.max(t.stun, stun);
+        s.fx.push({ type: 'spit', x0: e.x, y0: e.y - 3, x1: t.x, y1: t.y - 12, t: 0.3, T: 0.3 });
+      }
+    }
+    if (def.lays && (e.lay += DT) >= def.lays[2]) {
+      e.lay = 0;
+      for (let i = 0; i < def.lays[1]; i++) spawn(s, def.lays[0], e.pi, Math.max(0, e.d - 6 - i * 5));
+    }
+    if (def.glide && !e.hidden && (e.gl += DT) >= def.glide[0]) {
+      e.gl = 0;
+      s.fx.push({ type: 'glide', x: e.x, y: e.y - 4, t: 0.3, T: 0.3 });
+      e.d += def.glide[1];
+    }
+    // scared reptiles back away along the trail
+    const back = e.scareT > 0;
+    e.scareT -= DT;
     e.sprint -= DT;
-    e.d += def.speed * fast * (1 - slow) * (e.sprint > 0 ? 2 : 1) * DT;
+    e.d = Math.max(0, e.d + def.speed * fast * (1 - slow) * (e.sprint > 0 ? 2 : 1) * (back ? -0.7 : 1) * DT);
     const path = s.layout.paths[e.pi];
     if (e.d >= path.len) { e.gone = true; leak(s, e); if (s.over) return; continue; }
     const [x, y, dir] = posAt(path, e.d);
     e.x = x;
     e.y = y;
-    if (dir) e.dir = dir;
+    if (dir) e.dir = back ? -dir : dir;
+  }
+}
+
+// Area attacks return false when nothing was in reach, so they stay ready.
+function mob(s, t) {
+  const hits = s.enemies.filter(e => targetable(e, t.s) && dist2(e, t) <= t.s.range ** 2);
+  for (const e of hits) hit(s, e, t.s.dmg, t.s);
+  if (hits.length) s.fx.push({ type: 'mob', x: t.x, y: t.y - 6, r: t.s.range, t: 0.35, T: 0.35 });
+  return hits.length > 0;
+}
+
+function flash(s, t) {
+  const scared = s.enemies.filter(e => !e.gone && !e.hidden && (!e.def.boss || t.s.royal) && dist2(e, t) <= t.s.aura ** 2);
+  for (const e of scared) {
+    e.scareT = Math.max(e.scareT, t.s.scare);
+    e.fear = Math.max(e.fear || 0, t.s.fear || 0);
+  }
+  if (scared.length) s.fx.push({ type: 'flash', x: t.x, y: t.y - 14, r: t.s.aura, t: 0.4, T: 0.4 });
+  return scared.length > 0;
+}
+
+function storm(s, t) {
+  if (!s.enemies.length) return false;
+  s.rainT = Math.max(s.rainT, t.s.wet);
+  for (const e of [...s.enemies]) {
+    e.jam = Math.max(e.jamT > 0 ? e.jam : 0, t.s.slow);
+    e.jamT = Math.max(e.jamT, t.s.wet);
+    if (t.s.dmg) hit(s, e, t.s.dmg, t.s);
+  }
+  return true;
+}
+
+function taxes(s, t) {
+  for (const e of s.enemies) {
+    if (e.gone || e.hidden || dist2(e, t) > t.s.aura ** 2 || (e.taxed ??= new Set()).has(t.id)) continue;
+    e.taxed.add(t.id);
+    s.cash += Math.round(t.s.toll * t.s.econ);
+    if (t.s.stop && !e.def.boss) e.stunT = Math.max(e.stunT, t.s.stop);
+    s.fx.push({ type: 'coin', x: e.x, y: e.y - 8, t: 0.5, T: 0.5 });
   }
 }
 
@@ -348,10 +440,18 @@ function towersAct(s) {
     t.tick = 0.5;
     for (const e of [...s.enemies]) if (dist2(t, e) <= t.s.aura ** 2) hit(s, e, t.s.thorns / 2, t.s);
   }
+  const frills = s.enemies.filter(e => e.def.frill && !e.gone && !e.hidden);
   for (const t of s.towers) {
-    if (t.stun > 0) continue;
     const st = t.s;
-    if (!st.rate || (t.cd -= DT) > 0) continue;
+    if (t.stun > 0) continue;
+    if (st.kind === 'toll') { taxes(s, t); continue; }
+    // frilled lizards nearby make towers reload slower
+    const scared = frills.some(e => dist2(e, t) <= e.def.frill ** 2);
+    if (!st.rate || (t.cd -= scared ? DT * 0.6 : DT) > 0) continue;
+    if (st.kind === 'pulse' || st.kind === 'flash' || st.kind === 'rain') {
+      if ((st.kind === 'pulse' ? mob : st.kind === 'flash' ? flash : storm)(s, t)) { t.cd = st.rate; t.anim = 0.35; }
+      continue;
+    }
     const e = pickTarget(s, t);
     if (!e) continue;
     t.cd = st.rate;
@@ -361,6 +461,19 @@ function towersAct(s) {
     t.ay = e.y;
     if (st.kind === 'bomb') {
       s.shots.push({ x: t.x, y: t.y - 10, e, tx: e.x, ty: e.y, d0: Math.max(1, Math.hypot(e.x - t.x, e.y - t.y + 10)), st });
+      continue;
+    }
+    if (st.kind === 'chain') {
+      // the screech leaps to the nearest reptile it has not hit yet
+      const victims = [e];
+      while (victims.length < st.chain) {
+        const last = victims.at(-1), next = s.enemies.filter(o => !victims.includes(o) && targetable(o, st) && dist2(o, last) <= 32 * 32)
+          .sort((a, b) => dist2(a, last) - dist2(b, last))[0];
+        if (!next) break;
+        victims.push(next);
+      }
+      s.fx.push({ type: 'zap', pts: [[t.x, t.y - 13], ...victims.map(v => [v.x, v.y - 3])], t: 0.2, T: 0.2 });
+      for (const v of victims) hit(s, v, st.dmg, st);
       continue;
     }
     for (const v of [e, ...nearby(s, e, st, st.pierce - 1, st.kind === 'peck' ? 14 : 20)]) hit(s, v, st.dmg, st);
@@ -382,6 +495,7 @@ export function step(s) {
   s.time += DT;
   for (const f of s.fx) f.t -= DT;
   s.fx = s.fx.filter(f => f.t > 0);
+  s.rainT = Math.max(0, s.rainT - DT);
   // animation timers keep running between rounds
   for (const t of s.towers) {
     t.anim = Math.max(0, t.anim - DT);
@@ -390,7 +504,7 @@ export function step(s) {
   if (s.over || !s.active) return;
   s.qt += DT;
   while (s.queue.length && s.queue[0].t <= s.qt) spawn(s, s.queue.shift().id, s.spawned++ % s.layout.paths.length, 0);
-  for (const t of s.towers) if (t.kind === 'orchard' && (t.dropT -= DT) <= 0 && t.drops < 4) {
+  for (const t of s.towers) if (t.s.kind === 'orchard' && (t.dropT -= DT) <= 0 && t.drops < 4) {
     t.dropT = 2.5;
     t.drops++;
     pay(s, t, orchardDrop(t));
@@ -413,7 +527,7 @@ export function feathers(s, won) {
 export function snapshot(s) {
   const { mapIndex, mode, round, cash, eggs, startEggs, paid, seen } = s;
   return { mapIndex, mode, round, cash, eggs, startEggs, paid, seen,
-    towers: s.towers.map(({ kind, x, y, tiers, target, spent }) => ({ kind, x, y, tiers, target, spent })) };
+    towers: s.towers.map(({ kind, x, y, tiers, target, spent, age }) => ({ kind, x, y, tiers, target, spent, age })) };
 }
 
 export function restore(snap, profile) {
