@@ -1,5 +1,8 @@
 // Pixel art, drawn in code: character grids for the animals, small routines for props and scenery.
-import { REPTILES } from './data.js';
+import { TOWERS, REPTILES } from './data.js';
+import { rect, px, blob, LEAF, BIRD_PAL } from './art.js';
+
+export { rect, px };
 
 export function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -7,9 +10,6 @@ export function canvas(w, h) {
   c.height = h;
   return c;
 }
-export const rect = (g, x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
-export const px = (g, x, y, c) => rect(g, x, y, 1, 1, c);
-
 function paint(g, rows, pal, ox = 0, oy = 0, k = 1) {
   rows.forEach((row, y) => [...row].forEach((ch, x) => { if (pal[ch]) rect(g, ox + x * k, oy + y * k, k, k, pal[ch]); }));
 }
@@ -44,15 +44,6 @@ export function white(src) {
   return whites.get(src);
 }
 
-// Shaded oval: dark lower-right rim, light upper-left highlight.
-export function blob(g, cx, cy, rx, ry, [dark, mid, light]) {
-  for (let y = -ry; y <= ry; y++) for (let x = -rx; x <= rx; x++) {
-    const q = (x * x) / (rx * rx) + (y * y) / (ry * ry);
-    if (q > 1) continue;
-    px(g, cx + x, cy + y, q > 0.55 && x + y > 0 ? dark : x + y < -(rx + ry) * 0.35 ? light : mid);
-  }
-}
-
 // ---- Eastern Kingbird: black head, slate back, white front, white-tipped tail, hidden red crown (r).
 const BIRD = [
   '................',
@@ -72,7 +63,7 @@ const BIRD = [
   'kkw.....k..k....',
   'ww..............',
 ];
-// Wings raised behind the back: the attack pose.
+// Wings raised behind the back.
 const BIRD_FLAP = [
   '.ll.............',
   '.gll.....kkkk...',
@@ -88,134 +79,34 @@ const BIRD_FLAP = [
   '...kddddddwwwss.',
   ...BIRD.slice(12),
 ];
-// 0 idle, 1 breathing in (head and body up a pixel, feet planted), 2 wings up
-const POSES = [BIRD, [...BIRD.slice(1, 13), BIRD[12], ...BIRD.slice(13)], BIRD_FLAP];
-const BIRD_PAL = { k: '#16161d', d: '#3c4250', g: '#5d6576', l: '#a3adbf', w: '#ffffff', s: '#cfd6e2', e: '#e9ecf2' };
-const SCARF = { hawker: '#ff9a2e', quill: '#3da5ff', bomber: '#b25cff', mobber: '#ff6b6b', screecher: '#2ee6d6', lookout: '#ffcc33', shade: '#5fd04a',
-  flasher: '#ff2e63', rain: '#5b8cff', orchard: '#ff7eb6', scavenger: '#d9965a', nestegg: '#f2b520', taxman: '#2ecc71', ranch: '#c8763a' };
-const WOOD = ['#6e4420', '#a46b33', '#d29a55'];
-export const LEAF = ['#3a8f3a', '#52b448', '#86dd66'];
-
-// Tower sprites are 24x26 with the bird at (4, 3); the tower's position is pixel (12, 21).
-// Props get a frame number (0 or 1) for their own small animations.
-function post(g) {
-  rect(g, 6, 18, 13, 2, WOOD[1]); rect(g, 6, 19, 13, 1, WOOD[0]); px(g, 8, 18, WOOD[2]); px(g, 15, 18, WOOD[2]);
-  rect(g, 10, 20, 4, 5, WOOD[1]); rect(g, 13, 20, 1, 5, WOOD[0]); px(g, 11, 22, WOOD[0]);
-  rect(g, 8, 25, 8, 1, 'rgba(0,0,0,0.2)');
-}
-const PROPS = {
-  hawker: { back: post },
-  quill: {
-    back(g) {
-      post(g);
-      rect(g, 3, 9, 3, 7, '#8a5530'); px(g, 4, 10, '#b77a45');
-      for (const [x, y] of [[3, 5], [4, 4], [5, 6]]) { rect(g, x, y, 1, 5, '#ffffff'); px(g, x, y, '#3da5ff'); }
-    },
-  },
-  bomber: {
-    back: post,
-    front(g) {
-      rect(g, 15, 20, 8, 4, '#e0b673'); rect(g, 15, 23, 8, 1, '#a07a45');
-      for (let x = 16; x < 23; x += 2) px(g, x, 21, '#a07a45');
-      for (const [x, y] of [[16, 18], [18, 17], [20, 18]]) { rect(g, x, y, 2, 2, '#9b45d6'); px(g, x, y, '#e6b8ff'); }
-    },
-  },
-  lookout: {
-    back(g, f) {
-      rect(g, 2, 3, 1, 16, WOOD[0]);
-      // the flag flutters: its tip droops on frame 1
-      rect(g, 3, 3, f ? 4 : 5, 3, '#ffcc33'); rect(g, 3, 5, 3, 1, '#e8a317');
-      if (f) rect(g, 7, 4, 1, 3, '#ffcc33');
-      rect(g, 6, 18, 13, 2, WOOD[1]); rect(g, 6, 19, 13, 1, WOOD[0]);
-      for (let y = 20; y < 26; y++) { px(g, 8, y, WOOD[1]); px(g, 16, y, WOOD[1]); if (y % 2) rect(g, 9, y, 7, 1, WOOD[0]); }
-    },
-  },
-  shade: {
-    back(g, f) {
-      blob(g, 12, 7 - f, 11, 6, LEAF); // the canopy sways up and down a pixel
-      for (const x of [3, 20]) rect(g, x, 11 - f, 1, 7 + f, '#3c6a1e');
-      rect(g, 6, 18, 13, 2, '#6a8f34'); rect(g, 6, 19, 13, 1, '#466a22'); rect(g, 11, 20, 2, 5, '#6a8f34');
-    },
-  },
-  orchard: {
-    back(g, f) {
-      blob(g, 12, 21, 10, 4, LEAF);
-      for (const [x, y] of [[5, 20], [9, 23], [15, 22], [19, 20], [12, 19]]) { rect(g, x, y, 2, 2, '#ff3b4f'); px(g, x + f, y, '#ffb3bb'); }
-    },
-  },
-  nestegg: {
-    back(g) { rect(g, 4, 15, 17, 2, WOOD[0]); },
-    front(g, f) {
-      rect(g, 17, 12, 4, 5, '#ffcc33'); rect(g, 18, 11, 2, 1, '#ffcc33'); px(g, 18, 12, '#fff5b8'); rect(g, 20, 13, 1, 4, '#d9a21e');
-      if (f) for (const [x, y] of [[22, 9], [21, 10], [23, 10], [22, 11], [22, 10]]) px(g, x, y, '#ffffff'); // glint
-      rect(g, 3, 16, 19, 4, WOOD[1]); rect(g, 4, 20, 17, 1, WOOD[0]);
-      for (let x = 4; x < 21; x += 3) { px(g, x, 16, WOOD[2]); px(g, x + 1, 18, WOOD[0]); }
-    },
-  },
-  scavenger: {
-    back: post,
-    front(g) {
-      blob(g, 19, 21, 3, 3, ['#a07a45', '#e0b673', '#f7dca0']);
-      rect(g, 18, 17, 3, 1, '#6e4420'); px(g, 19, 21, '#4fd15f'); px(g, 20, 22, '#4fd15f'); px(g, 18, 22, '#36a845');
-    },
-  },
-  mobber: {
-    back(g, f) {
-      post(g);
-      // two young kingbirds riding along, bobbing
-      for (const [x, y] of [[5, 15 + f], [19, 16 - f]]) { rect(g, x, y, 2, 1, BIRD_PAL.k); rect(g, x, y + 1, 2, 1, BIRD_PAL.w); px(g, x - 1, y + 1, BIRD_PAL.d); }
-    },
-  },
-  screecher: {
-    back: post,
-    front(g, f) {
-      // sound waves coming off the beak, pulsing
-      for (let k = 0; k <= f; k++) { const x = 20 + k * 2; px(g, x, 5, '#2ee6d6'); rect(g, x + 1, 6, 1, 3, '#2ee6d6'); px(g, x, 9, '#2ee6d6'); }
-    },
-  },
-  flasher: {
-    back(g) {
-      rect(g, 6, 18, 13, 2, '#9b45d6'); rect(g, 6, 20, 13, 1, '#6a2fa0'); px(g, 8, 18, '#d39be8');
-      rect(g, 10, 21, 4, 4, '#ffcc33'); rect(g, 13, 21, 1, 4, '#d9a21e'); rect(g, 8, 25, 8, 1, 'rgba(0,0,0,0.2)');
-    },
-  },
-  rain: {
-    back(g, f) {
-      post(g);
-      blob(g, 6, 4, 5, 3, ['#b9c6d8', '#e6eef7', '#ffffff']);
-      for (let k = 0; k < 3; k++) px(g, 3 + k * 3, 8 + ((k + f) % 2) * 2, '#3da5ff'); // falling drops
-    },
-  },
-  taxman: {
-    back: post,
-    front(g, f) {
-      rect(g, 15, 19, 7, 5, '#a46b33'); rect(g, 15, 19, 7, 1, '#d29a55'); rect(g, 15, 23, 7, 1, '#6e4420');
-      rect(g, 17, 16, 3, 3, '#ffcc33'); px(g, 18, 17, '#a35a00'); if (f) px(g, 19, 16, '#ffffff');
-    },
-  },
-  ranch: {
-    back(g, f) {
-      rect(g, 2, 21, 20, 4, '#a46b33'); rect(g, 2, 21, 20, 1, '#7a4b26');
-      for (const x of [2, 8, 14, 20]) rect(g, x, 18, 1, 6, '#6e4420');
-      rect(g, 2, 19, 19, 1, '#d29a55');
-      px(g, 5 + f, 23, '#ff3b4f'); px(g, 12 - f, 22, '#4fd15f'); px(g, 17 + f, 23, '#ffd23f'); // bugs scurrying
-    },
-  },
-};
+// Wings half raised, swept back: the wind-up before a strike.
+const BIRD_HALF = [
+  ...BIRD.slice(0, 5),
+  '.lgggg.dkkkkkww.',
+  '..dggggdccccwww.',
+  ...BIRD_FLAP.slice(7, 12),
+  ...BIRD.slice(12),
+];
+// Opens the beak (dark bill top and bottom, pink mouth between) on any pose that keeps the head in place.
+const setAt = (row, col, str) => row.slice(0, col) + str + row.slice(col + str.length);
+const openBeak = rows => rows.map((row, y) => y === 3 || y === 5 ? setAt(row, 14, 'kk') : y === 4 ? setAt(row, 14, 'm.') : row);
+// 0 idle, 1 breathing in (head and body up a pixel, feet planted), 2 wings up, 3 wings half up
+export const POSE = { idle: 0, breathe: 1, flap: 2, half: 3 };
+const POSES = [BIRD, [...BIRD.slice(1, 13), BIRD[12], ...BIRD.slice(13)], BIRD_FLAP, BIRD_HALF];
 
 // Back prop, bird and front prop as separate layers, so the bird can move without its perch.
-export function towerParts(kind, { crowned = false, left = false, pose = 0, blink = false, prop = 0 } = {}) {
+export function towerParts(kind, { crowned = false, left = false, pose = 0, beak = false, blink = false, prop = 0 } = {}) {
   const layer = (key, draw) => cached(`${key}${left}`, () => {
     const c = canvas(24, 26);
     draw(c.getContext('2d'));
     return left ? mirror(c) : c;
   });
-  const props = PROPS[kind];
+  const def = TOWERS[kind];
   return {
-    back: layer(`back${kind}${prop}`, g => props.back?.(g, prop)),
-    bird: layer(`bird${kind}${crowned}${pose}${blink}`, g => paint(g, POSES[pose],
-      { ...BIRD_PAL, c: SCARF[kind], r: crowned ? '#ff4a2e' : BIRD_PAL.k, e: blink ? BIRD_PAL.k : BIRD_PAL.e }, 4, 3)),
-    front: layer(`front${kind}${prop}`, g => props.front?.(g, prop)),
+    back: layer(`back${kind}${prop}`, g => def.back?.(g, prop)),
+    bird: layer(`bird${kind}${crowned}${pose}${beak}${blink}`, g => paint(g, beak ? openBeak(POSES[pose]) : POSES[pose],
+      { ...BIRD_PAL, c: def.scarf, r: crowned ? '#ff4a2e' : BIRD_PAL.k, e: blink ? BIRD_PAL.k : BIRD_PAL.e }, 4, 3)),
+    front: layer(`front${kind}${prop}`, g => def.front?.(g, prop)),
   };
 }
 
@@ -308,38 +199,7 @@ const SHAPES = {
 SHAPES.bigcroc = { ...SHAPES.croc, k: 2 };
 SHAPES.biglizard2 = { ...SHAPES.biglizard, k: 2 };
 SHAPES.bigturtle2 = { ...SHAPES.bigturtle, k: 2 };
-
-const PALS = {
-  anole: { 1: '#6fe04a', 2: '#2f8f2a', 3: '#c8ff8a', 4: '#6fe04a' },
-  skink: { 1: '#a8803f', 2: '#6a4b22', 3: '#f0d394', 4: '#3da5ff' },
-  chameleon: { 1: '#9be65a', 2: '#56a830', 3: '#e2ffab', 4: '#ffd23f' },
-  basilisk: { 1: '#3fcf5a', 2: '#1f8a34', 3: '#b4f5a0', 4: '#2fa847' },
-  iguana: { 1: '#8fc45e', 2: '#4d7a30', 3: '#e0ee9e', 4: '#5f8c3c' },
-  gila: { 1: '#ff8f6b', 2: '#3a2326', 3: '#ffd1b0', 4: '#3a2326' },
-  garter: { 1: '#3f8a3a', 2: '#22501f', 3: '#ffe45c', 4: '#ffe45c' },
-  hognose: { 1: '#d8a05c', 2: '#7f5a2c', 3: '#f6e2b4', 4: '#7f5a2c' },
-  rattle: { 1: '#e2bf78', 2: '#7a5c34', 3: '#fff0c8', 4: '#7a5c34' },
-  ratsnake: { 1: '#454552', 2: '#22222a', 3: '#e8e2cf', 4: '#6a6a78', e: '#ffd23f' },
-  anaconda: { 1: '#6a8a34', 2: '#36481a', 3: '#e0d98a', 4: '#26300f', e: '#ffd23f' },
-  boxturtle: { 1: '#c47432', 2: '#6a3c16', 3: '#e2b06a', 4: '#ffc93c' },
-  seaturtle: { 1: '#4fb07a', 2: '#2c6e4c', 3: '#b0e0bf', 4: '#b8f09a' },
-  tortoise: { 1: '#a8946a', 2: '#5e5038', 3: '#c0b08a', 4: '#d8c690' },
-  croc: { 1: '#6a9a44', 2: '#3a5f2c', 3: '#d8dc94', 4: '#6a9a44', e: '#ffd23f' },
-  gator: { 1: '#4a5f46', 2: '#243024', 3: '#b8bd90', 4: '#4a5f46', e: '#ffc030' },
-  gecko: { 1: '#f2c14e', 2: '#b07a2a', 3: '#fff0b0', 4: '#ff8c42' },
-  thorny: { 1: '#e0903f', 2: '#8a4a1c', 3: '#f6cc90', 4: '#6a3510' },
-  horned: { 1: '#d2b07e', 2: '#7a5c3a', 3: '#f2e4c4', 4: '#9a7a50' },
-  frilled: { 1: '#c27c4e', 2: '#7a4422', 3: '#ffd0a0', 4: '#ff5a36' },
-  draco: { 1: '#7fcf5a', 2: '#3f7a2a', 3: '#e0f7b8', 4: '#ffb347' },
-  worm: { 1: '#f0a0a8', 2: '#b8646e', 3: '#ffd6da', 4: '#d07884' },
-  chuck: { 1: '#44444c', 2: '#1e1e24', 3: '#a8a8b2', 4: '#ff8c42' },
-  cobra: { 1: '#6a5640', 2: '#2e241c', 3: '#ecdcb4', 4: '#c8a060' },
-  caiman: { 1: '#8a9a62', 2: '#4a5634', 3: '#dadcae', 4: '#8a9a62', e: '#ffd23f' },
-  tuatara: { 1: '#9a9f62', 2: '#4a4d2c', 3: '#e2e2b0', 4: '#f0e8a8', e: '#ffd23f' },
-  komodo: { 1: '#8a7a66', 2: '#3e3428', 3: '#d2c2a8', 4: '#5e4e3c', e: '#ffd23f' },
-  leather: { 1: '#46566a', 2: '#1e2630', 3: '#b4c4d4', 4: '#e0e8f0' },
-};
-export const bodyColor = id => PALS[REPTILES[id].pal][1];
+export const bodyColor = id => REPTILES[id].colors[1];
 
 // Snakes are drawn from a sine wave, so slither frames and boss sizes come for free.
 function snake(pal, len, th, amp, phase, tongue) {
@@ -364,7 +224,7 @@ function snake(pal, len, th, amp, phase, tongue) {
 // Walk-cycle frames for a reptile, facing right (r) and left (l); stride is the pixels walked per frame.
 export function reptileFrames(id) {
   return cached(`reptile${id}`, () => {
-    const def = REPTILES[id], pal = { e: '#111111', w: '#ffffff', ...PALS[def.pal] };
+    const def = REPTILES[id], pal = { e: '#111111', w: '#ffffff', ...def.colors };
     let right;
     if (def.sprite === 'snake' || def.sprite === 'bigsnake') {
       const [len, th, amp] = def.sprite === 'snake' ? [12, 2, 1] : [36, 6, 3];

@@ -234,7 +234,7 @@ export function spawn(s, id, pi, d) {
 const orchardDrop = t => Math.round((t.s.income + (t.s.growth || 0) * Math.min(t.age, t.s.grow || 0)) * t.s.econ / 4);
 function pay(s, t, n) {
   s.cash += n;
-  t.anim = 0.3; // flaps its wings
+  t.anim = t.animT = 0.3; // flaps its wings
   s.fx.push({ type: 'text', icon: true, x: t.x, y: t.y - 24, n: `+${n}`, t: 0.9, T: 0.9 });
 }
 
@@ -451,14 +451,14 @@ function towersAct(s) {
     const scared = frills.some(e => dist2(e, t) <= e.def.frill ** 2);
     if (!st.rate || (t.cd -= scared ? DT * 0.6 : DT) > 0) continue;
     if (st.kind === 'pulse' || st.kind === 'flash' || st.kind === 'rain') {
-      if ((st.kind === 'pulse' ? mob : st.kind === 'flash' ? flash : storm)(s, t)) { t.cd = st.rate; t.anim = 0.35; t.shotAt = s.time; }
+      if ((st.kind === 'pulse' ? mob : st.kind === 'flash' ? flash : storm)(s, t)) { t.cd = st.rate; t.anim = t.animT = 0.4; t.shotAt = s.time; }
       continue;
     }
     const e = pickTarget(s, t);
     if (!e) continue;
     t.cd = st.rate;
     t.face = e.x < t.x ? -1 : 1;
-    t.anim = 0.15;
+    t.anim = t.animT = 0.24; // long enough to see the attack frames
     t.shotAt = s.time; // lets the bird settle into idle habits once things go quiet
     t.ax = e.x;
     t.ay = e.y;

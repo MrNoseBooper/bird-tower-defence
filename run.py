@@ -68,6 +68,12 @@ class handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         self.api("POST")
 
+    def end_headers(self):
+        # Make the browser re-check game files every load, so after an update it never mixes old and new code.
+        if not self.path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def api(self, method):
         url = urlparse(self.path)
         code = parse_qs(url.query).get("code", [""])[0]

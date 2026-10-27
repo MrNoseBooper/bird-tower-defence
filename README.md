@@ -35,9 +35,13 @@ To turn on cloud saves, add Upstash Redis from the Vercel Marketplace (Storage t
 
 | File | What it holds |
 |---|---|
-| `public/js/data.js` | Towers, upgrades, reptiles, maps. All balance numbers are here. |
-| `public/js/sim.js` | Game rules. No DOM, so it runs headless in tests. |
-| `public/js/sprites.js` | Pixel art drawn in code (no image files) |
+| `public/js/towers/` | One file per kingbird tower: cost, stats, upgrade paths, scarf colour and props. `index.js` sets the shop order. |
+| `public/js/lizards/` | One file per reptile (snakes, turtles and crocs included): stats, abilities, colours. |
+| `public/js/data.js` | Maps, themes, starting cash and eggs, Roost costs |
+| `public/js/sim.js` | Game rules, including what each attack kind does. No DOM, so it runs headless in tests. |
+| `public/js/sprites.js` | Pixel art drawn in code (no image files): bird poses, reptile body shapes, scenery |
+| `public/js/art.js` | Shared drawing helpers used by sprites.js and the tower files |
+| `public/js/sfx.js` | Sound effects, synthesized in code |
 | `public/js/render.js` | Draws the board |
 | `public/js/main.js` | Screens, input, game loop |
 | `public/js/save.js` | Browser and server saves |

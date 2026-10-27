@@ -54,7 +54,9 @@ class ServerTest(unittest.TestCase):
         status, body, _ = self.call("/")
         self.assertEqual(status, 200)
         self.assertIn('<canvas id="board"', body)
-        self.assertEqual(self.call("/js/main.js")[2]["Content-Type"], "text/javascript")
+        headers = self.call("/js/main.js")[2]
+        self.assertEqual(headers["Content-Type"], "text/javascript")
+        self.assertEqual(headers["Cache-Control"], "no-cache", "browsers must re-check game files after updates")
 
 
 if __name__ == "__main__":

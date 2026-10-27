@@ -1,7 +1,7 @@
 // Draws the board. The background is painted once per map; everything else every frame.
 import { TOWERS, REPTILES, THEMES } from './data.js';
 import { W, H, PATH_HALF, TOWER_R, layout, segDist, rng, stats, canPlace, price } from './sim.js';
-import { canvas, rect, px, towerParts, reptileFrames, white, bodyColor, DECOR } from './sprites.js';
+import { canvas, rect, px, towerParts, reptileFrames, white, bodyColor, DECOR, POSE } from './sprites.js';
 
 const backgrounds = new Map();
 export function background(map) {
@@ -107,14 +107,31 @@ function habit(t, clock) {
   return at < len ? [['', 'glance', 'hop', 'stretch'][pick], at / len] : [''];
 }
 
+// Frames a bird plays while it acts, by attack kind: [pose, beak open?] from start to finish.
+const ACT = {
+  peck: [['half'], ['flap', 1], ['flap', 1], ['half']], // winds up, strikes beak-first, settles
+  snipe: [['flap'], ['flap', 1], ['half']], // raises its wings and flings a quill
+  bomb: [['half'], ['flap'], ['flap'], ['half']], // winds up and lobs
+  chain: [['idle', 1], ['half', 1], ['half', 1], ['idle', 1]], // screeches
+  pulse: [['half', 1], ['flap', 1], ['flap', 1], ['half']], // calls the flock in
+  flash: [['idle', 1], ['flap', 1], ['flap', 1], ['idle']], // shouts with its crown up
+  rain: [['half'], ['flap', 1], ['flap'], ['half']], // calls the clouds
+};
+const CHEER = [['half'], ['flap'], ['half']]; // money towers flutter when they pay out
+
 // How a tower's bird looks and where it sits this frame. Motions stay within a couple of pixels so the board stays calm.
 function towerLook(t, time, extra = {}) {
   const clock = time + t.id * 0.77, busy = t.anim > 0, rate = PROP_RATE[t.kind], kind = TOWERS[t.kind].base.kind;
   const [act, q] = !busy && time - (t.shotAt ?? -9) > 1.5 ? habit(t, clock) : [''];
   // the Lookout looks around; attackers face their target
   let left = t.kind === 'lookout' && !busy ? Math.floor(clock / 2.2) % 2 === 1 : t.face < 0, bx = 0, by = 0;
+  let pose = act === 'stretch' ? POSE.flap : Math.floor(clock * 1.6) % 2, beak = false;
   if (busy) {
-    const k = Math.sin(Math.PI * Math.min(1, t.anim / (['peck', 'snipe', 'bomb', 'chain'].includes(kind) ? 0.15 : 0.35))), dir = left ? -1 : 1;
+    const prog = Math.max(0, Math.min(0.999, 1 - t.anim / (t.animT || 0.3))), seq = ACT[kind] || CHEER;
+    const [name, open] = seq[Math.floor(prog * seq.length)];
+    pose = POSE[name];
+    beak = !!open;
+    const k = Math.sin(Math.PI * prog), dir = left ? -1 : 1;
     if (kind === 'peck' && t.ax != null) { // the Hawker darts out at its target and back
       const d = Math.hypot(t.ax - t.x, t.ay - t.y) || 1;
       bx = (t.ax - t.x) / d * 7 * k;
@@ -128,7 +145,8 @@ function towerLook(t, time, extra = {}) {
   return {
     crowned: Math.max(...t.tiers) >= 3 || (t.kind === 'flasher' && busy),
     left,
-    pose: busy || act === 'stretch' ? 2 : Math.floor(clock * 1.6) % 2,
+    pose,
+    beak,
     blink: !busy && clock % 3.7 < 0.13,
     prop: rate ? Math.floor(clock * rate) % 2 : 0,
     bx, by,
@@ -341,7 +359,7 @@ export function drawParade(g, time) {
     shadow(g, x, road + 2, img.width * 0.35);
     g.drawImage(img, Math.round(x - img.width / 2), Math.round(road - img.height + 3 - f % 2));
   }
-  const bird = { id: 3, kind: 'hawker', tiers: [3, 0], face: -1, anim: time % 2.4 < 0.25 ? 1 : 0 };
+  const a = time % 2.4, bird = { id: 3, kind: 'hawker', tiers: [3, 0], face: -1, anim: a < 0.24 ? 0.24 - a : 0, animT: 0.24 };
   const look = towerLook(bird, time, { left: true });
   drawParts(g, towerParts('hawker', look), w - 24, road - 9, look.bx, look.by);
   insects(g, time, 2, w, h - 16, 3);
