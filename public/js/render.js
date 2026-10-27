@@ -100,15 +100,38 @@ function shimmer(g, s, th) {
 
 // A tower's look this frame: breathing, blinking, wings up while it works, and its prop's own animation.
 const PROP_RATE = { lookout: 3, shade: 1.2, orchard: 1.5, nestegg: 0.8, mobber: 2, screecher: 4, rain: 3, taxman: 1, ranch: 2 };
+// One small idle habit every few seconds per bird: glance back, a little hop, or a wing stretch. [name, 0..1 progress]
+function habit(t, clock) {
+  const period = 4.5 + (t.id % 4) * 0.7, at = clock % period, pick = (Math.floor(clock / period) * 7 + t.id * 3) % 4;
+  const len = [0, 0.9, 0.3, 0.25][pick];
+  return at < len ? [['', 'glance', 'hop', 'stretch'][pick], at / len] : [''];
+}
+
+// How a tower's bird looks and where it sits this frame. Motions stay within a couple of pixels so the board stays calm.
 function towerLook(t, time, extra = {}) {
-  const clock = time + t.id * 0.77, busy = t.anim > 0, rate = PROP_RATE[t.kind];
+  const clock = time + t.id * 0.77, busy = t.anim > 0, rate = PROP_RATE[t.kind], kind = TOWERS[t.kind].base.kind;
+  const [act, q] = !busy && time - (t.shotAt ?? -9) > 1.5 ? habit(t, clock) : [''];
+  // the Lookout looks around; attackers face their target
+  let left = t.kind === 'lookout' && !busy ? Math.floor(clock / 2.2) % 2 === 1 : t.face < 0, bx = 0, by = 0;
+  if (busy) {
+    const k = Math.sin(Math.PI * Math.min(1, t.anim / (['peck', 'snipe', 'bomb', 'chain'].includes(kind) ? 0.15 : 0.35))), dir = left ? -1 : 1;
+    if (kind === 'peck' && t.ax != null) { // the Hawker darts out at its target and back
+      const d = Math.hypot(t.ax - t.x, t.ay - t.y) || 1;
+      bx = (t.ax - t.x) / d * 7 * k;
+      by = (t.ay - t.y) / d * 7 * k;
+    } else if (kind === 'snipe') bx = -dir * 2 * k; // recoil
+    else if (kind === 'chain') { bx = dir * k; by = -k; } // leans into the screech
+    else by = -2 * k; // tosses, calls or celebrates with a hop
+  } else if (t.cd > 0 && t.cd < 0.08) by = 1; // crouches just before it strikes
+  if (act === 'glance') left = !left;
+  if (act === 'hop') by = -2 * Math.sin(Math.PI * q);
   return {
     crowned: Math.max(...t.tiers) >= 3 || (t.kind === 'flasher' && busy),
-    // the Lookout looks around; attackers face their target
-    left: t.kind === 'lookout' && !busy ? Math.floor(clock / 2.2) % 2 === 1 : t.face < 0,
-    pose: busy ? 2 : Math.floor(clock * 1.6) % 2,
+    left,
+    pose: busy || act === 'stretch' ? 2 : Math.floor(clock * 1.6) % 2,
     blink: !busy && clock % 3.7 < 0.13,
     prop: rate ? Math.floor(clock * rate) % 2 : 0,
+    bx, by,
     ...extra,
   };
 }
@@ -121,16 +144,9 @@ function drawParts(g, L, x, y, bx = 0, by = 0) {
 }
 
 function tower(g, s, t) {
-  let bx = 0, by = 0;
-  if (t.kind === 'hawker' && t.anim > 0) {
-    // the Hawker darts out at its target and back
-    const d = Math.hypot(t.ax - t.x, t.ay - t.y) || 1, k = 7 * Math.sin(Math.PI * t.anim / 0.15);
-    bx = (t.ax - t.x) / d * k;
-    by = (t.ay - t.y) / d * k;
-  }
   // new towers drop in from above
-  const age = s.time - (t.born ?? -1), drop = age < 0.3 ? -12 * (1 - age / 0.3) ** 2 : 0;
-  drawParts(g, towerParts(t.kind, towerLook(t, s.time)), t.x, t.y + drop, bx, by);
+  const age = s.time - (t.born ?? -1), drop = age < 0.3 ? -12 * (1 - age / 0.3) ** 2 : 0, look = towerLook(t, s.time);
+  drawParts(g, towerParts(t.kind, look), t.x, t.y + drop, look.bx, look.by);
   if (t.stun > 0) stars(g, t.x, t.y - 22, s.time);
 }
 
@@ -326,6 +342,7 @@ export function drawParade(g, time) {
     g.drawImage(img, Math.round(x - img.width / 2), Math.round(road - img.height + 3 - f % 2));
   }
   const bird = { id: 3, kind: 'hawker', tiers: [3, 0], face: -1, anim: time % 2.4 < 0.25 ? 1 : 0 };
-  drawParts(g, towerParts('hawker', towerLook(bird, time, { left: true })), w - 24, road - 9);
+  const look = towerLook(bird, time, { left: true });
+  drawParts(g, towerParts('hawker', look), w - 24, road - 9, look.bx, look.by);
   insects(g, time, 2, w, h - 16, 3);
 }

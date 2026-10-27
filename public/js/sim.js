@@ -451,7 +451,7 @@ function towersAct(s) {
     const scared = frills.some(e => dist2(e, t) <= e.def.frill ** 2);
     if (!st.rate || (t.cd -= scared ? DT * 0.6 : DT) > 0) continue;
     if (st.kind === 'pulse' || st.kind === 'flash' || st.kind === 'rain') {
-      if ((st.kind === 'pulse' ? mob : st.kind === 'flash' ? flash : storm)(s, t)) { t.cd = st.rate; t.anim = 0.35; }
+      if ((st.kind === 'pulse' ? mob : st.kind === 'flash' ? flash : storm)(s, t)) { t.cd = st.rate; t.anim = 0.35; t.shotAt = s.time; }
       continue;
     }
     const e = pickTarget(s, t);
@@ -459,6 +459,7 @@ function towersAct(s) {
     t.cd = st.rate;
     t.face = e.x < t.x ? -1 : 1;
     t.anim = 0.15;
+    t.shotAt = s.time; // lets the bird settle into idle habits once things go quiet
     t.ax = e.x;
     t.ay = e.y;
     if (st.kind === 'bomb') {
