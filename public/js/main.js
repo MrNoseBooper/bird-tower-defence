@@ -229,7 +229,9 @@ function buildInfo(box, t) {
   }
   const def = TOWERS[t.kind], head = el('div', 'head'), name = el('div'), paths = el('div', 'paths'), row = el('div', 'row');
   name.append(el('b', null, def.name), el('small', null, def.role));
-  head.append(image(towerIcon(t.kind)), name);
+  const close = button('Close', () => { ui.sel = null; }, 'close');
+  close.title = 'Back to the shop (Esc)';
+  head.append(image(towerIcon(t.kind)), name, close);
   def.paths.forEach((path, p) => {
     const col = el('div', 'path'), tier = t.tiers[p], up = path[tier];
     col.append(el('div', 'pips', '■'.repeat(tier) + '□'.repeat(3 - tier)));
@@ -250,9 +252,15 @@ function buildInfo(box, t) {
 }
 
 // Rebuild the panel only when the selection changes, so buttons aren't swapped out mid-click.
+// A selected tower's upgrades take the shop's place, so everything fits without scrolling.
 function updateInfo() {
   const t = ui.sel, box = $('#info'), key = t ? `${t.id}|${t.tiers}|${t.target}` : `none|${ui.placing}`;
-  if (key !== ui.built) { ui.built = key; buildInfo(box, t); }
+  if (key !== ui.built) {
+    ui.built = key;
+    buildInfo(box, t);
+    $('#shop').hidden = !!t;
+    if (t) $('#panel').scrollTop = 0;
+  }
   if (!t) return;
   for (const b of box.querySelectorAll('.up')) {
     const u = sim.upgradeInfo(game, t, +b.dataset.path);
