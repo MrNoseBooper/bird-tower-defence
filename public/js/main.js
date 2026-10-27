@@ -4,6 +4,7 @@ import * as sim from './sim.js';
 import { draw, background, drawParade } from './render.js';
 import { towerIcon, iconURL } from './sprites.js';
 import { loadLocal, persist, pull, normalize } from './save.js';
+import * as sfx from './sfx.js';
 
 const $ = sel => document.querySelector(sel);
 const el = (tag, cls, text) => {
@@ -20,7 +21,8 @@ const KINDS = Object.keys(TOWERS);
 const board = $('#board'), ctx = board.getContext('2d'), parade = $('#parade').getContext('2d');
 ctx.imageSmoothingEnabled = false;
 const ui = { placing: null, sel: null, mx: 0, my: 0, hover: false, built: null, last: [0, 'campaign'] };
-let save = loadLocal(), game = null, paused = false, acc = 0, lastFrame = 0, wait = 0;
+let save = loadLocal(), game = null, paused = false, acc = 0, lastFrame = 0, wait = 0, shake = 0, lastCash = 0, bumpAt = 0;
+const calm = matchMedia('(prefers-reduced-motion: reduce)');
 const AUTO_START = 10; // seconds between rounds before the next one starts on its own
 
 // ---- screens
@@ -152,7 +154,11 @@ function lose() {
 
 function handleEvents() {
   for (const ev of game.events.splice(0)) {
-    if (ev.type === 'new') toast(`New reptile: ${REPTILES[ev.id].name}. ${REPTILES[ev.id].note}`, 8000);
+    if (ev.type === 'kill') {
+      sfx.kill(ev.big || ev.boss);
+      if (ev.boss) { sfx.boss(); banner('Boss defeated!'); shake = 0.6; }
+      else if (ev.big) shake = Math.max(shake, 0.15);
+    } else if (ev.type === 'new') toast(`New reptile: ${REPTILES[ev.id].name}. ${REPTILES[ev.id].note}`, 8000);
     else if (ev.type === 'unlock') {
       toast(`New kingbird unlocked: ${TOWERS[ev.kind].name}! ${TOWERS[ev.kind].desc}`, 8000);
       buildShop();
@@ -258,6 +264,14 @@ function updateInfo() {
 
 function hud() {
   setText($('#s-cash'), Math.floor(game.cash));
+  if (game.cash > lastCash && performance.now() - bumpAt > 180) { // the berry count bumps as berries come in
+    bumpAt = performance.now();
+    const c = $('#s-cash');
+    c.classList.remove('bump');
+    void c.offsetWidth;
+    c.classList.add('bump');
+  }
+  lastCash = game.cash;
   setText($('#s-eggs'), game.eggs);
   setText($('#s-round'), game.mode === 'campaign' ? `Round ${game.round}/${game.map.rounds}` : `Round ${game.round} · endless`);
   $('#btn-go').disabled = game.active || !!game.over;
@@ -319,14 +333,22 @@ $('#btn-go').onclick = go;
 function go() {
   if (!sim.startRound(game)) return;
   wait = 0;
+  banner(game.round === game.map.rounds && game.mode === 'campaign' ? `Final round ${game.round}!` : `Round ${game.round}`);
+}
+
+// A big title across the board for a moment.
+function banner(text) {
   const b = $('#banner');
-  b.textContent = game.round === game.map.rounds && game.mode === 'campaign' ? `Final round ${game.round}!` : `Round ${game.round}`;
+  b.textContent = text;
   b.hidden = false;
   b.classList.remove('show');
   void b.offsetWidth; // restart the animation
   b.classList.add('show');
 }
 $('#btn-speed').onclick = () => { game.speed = game.speed % 3 + 1; };
+const soundLabel = () => setText($('#btn-sound'), sfx.muted ? 'Sound off' : 'Sound on');
+$('#btn-sound').onclick = () => { sfx.toggleMute(); soundLabel(); };
+soundLabel();
 $('#btn-menu').onclick = () => {
   if (game.over) return;
   paused = true;
@@ -360,6 +382,9 @@ function frame(now) {
     return;
   }
   if (!paused) for (acc += dt * game.speed; acc >= sim.DT; acc -= sim.DT) sim.step(game);
+  shake = Math.max(0, shake - dt);
+  const k = calm.matches ? 0 : shake * 14;
+  board.style.transform = k ? `translate(${Math.round((Math.random() - 0.5) * k)}px, ${Math.round((Math.random() - 0.5) * k)}px)` : '';
   if (!paused && !game.active && !game.over && $('#modal').hidden && (wait += dt * game.speed) >= AUTO_START) go();
   draw(ctx, game, ui);
   handleEvents();

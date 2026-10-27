@@ -214,9 +214,20 @@ function effect(g, f) {
     case 'ring': ring(g, f.x, f.y, Math.max(1, f.r * p), 'rgba(0,0,0,0)', '#ffe9a8'); break;
     case 'clink': star(g, x, y, 1, '#ffffff', '#b9c6d8'); break;
     case 'poof':
-      burst(g, f, 8, bodyColor(f.id), 8, p);
-      burst(g, { x: f.x + 0.9, y: f.y }, 6, '#ffffff', 5, p);
+      burst(g, f, f.big ? 16 : 8, bodyColor(f.id), f.big ? 15 : 8, p);
+      burst(g, { x: f.x + 0.9, y: f.y }, f.big ? 10 : 6, '#ffffff', f.big ? 9 : 5, p);
+      ring(g, f.x, f.y - 3, (f.big ? 14 : 7) * p, 'rgba(0,0,0,0)', '#ffffff');
       break;
+    case 'corpse': {
+      // the defeated reptile flashes, flips belly up and squashes flat
+      const set = reptileFrames(f.id), img = (f.dir < 0 ? set.l : set.r)[0];
+      g.save();
+      g.translate(Math.round(f.x - img.width / 2), Math.round(f.y + 3));
+      g.scale(1, -(1 - p));
+      g.drawImage(p < 0.3 ? white(img) : img, 0, 0);
+      g.restore();
+      break;
+    }
     case 'drop': burst(g, { x: f.x + 0.4, y: f.y + 5 }, 8, '#f3e3c3', 9, p); break;
     case 'sparkle':
       for (let i = 0; i < 6; i++) {

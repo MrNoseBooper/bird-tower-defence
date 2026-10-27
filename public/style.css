@@ -110,8 +110,11 @@ h3 { font-size: 24px; }
 #info .row { display: flex; gap: 6px; }
 #info .row button { flex: 1; font-size: 17px; padding: 4px 6px; text-transform: capitalize; }
 
-.controls { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; margin-top: auto; padding-bottom: 3px; }
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: auto; padding-bottom: 3px; }
 .controls button { font-size: 20px; padding: 6px 10px; }
+#s-cash { display: inline-block; }
+#s-cash.bump { animation: bump 0.18s ease-out; }
+@keyframes bump { 50% { transform: scale(1.3); color: #b86e00; } }
 
 #bossbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: min(60%, 420px); background: var(--paper); border: 3px solid var(--ink); box-shadow: 0 3px 0 var(--ink); padding: 4px 8px 6px; text-align: center; font-size: 18px; }
 #bossbar .bar { height: 8px; margin-top: 3px; background: #ffd0c4; border: 2px solid var(--ink); }
@@ -136,7 +139,7 @@ h3 { font-size: 24px; }
 #modal h2 { font-size: 36px; }
 
 @media (prefers-reduced-motion: reduce) {
-  #title img.cloud, #logo, .toast, #modal .box { animation: none; }
+  #title img.cloud, #logo, .toast, #modal .box, #s-cash.bump { animation: none; }
   #banner.show { animation: banner-fade 1.6s linear; }
   @keyframes banner-fade { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
 }

@@ -319,8 +319,10 @@ function kill(s, e) {
   for (const t of s.scavs) if (dist2(t, e) <= t.s.aura ** 2) bonus = Math.max(bonus, t.s.bonus * t.s.econ);
   const gain = Math.round(e.def.bounty * (1 + bonus)) + s.flat;
   s.cash += gain;
-  if (gain >= 10) s.fx.push({ type: 'text', x: e.x, y: e.y - 10, n: `+${gain}`, t: 0.9, T: 0.9 });
-  s.fx.push({ type: 'poof', id: e.id, x: e.x, y: e.y, t: 0.45, T: 0.45 });
+  s.fx.push({ type: 'corpse', id: e.id, dir: e.dir, x: e.x, y: e.y, t: 0.35, T: 0.35 });
+  s.fx.push({ type: 'poof', id: e.id, big: e.def.big, x: e.x, y: e.y, t: 0.45, T: 0.45 });
+  s.fx.push({ type: 'text', icon: true, x: e.x, y: e.y - 10, n: `+${gain}`, t: 0.7, T: 0.7 });
+  s.events.push({ type: 'kill', big: !!e.def.big, boss: !!e.def.boss });
   if (e.def.squirt) {
     stunTowers(s, e.x, e.y, ...e.def.squirt);
     s.fx.push({ type: 'squirt', x: e.x, y: e.y, r: e.def.squirt[0], t: 0.4, T: 0.4 });
