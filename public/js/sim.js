@@ -132,8 +132,10 @@ export function placeTower(s, kind, x, y) {
   const cost = price(s, TOWERS[kind].cost);
   if (s.over || s.cash < cost || !canPlace(s, kind, x, y)) return null;
   const t = newTower(s, kind, x, y, { spent: cost });
+  t.born = s.time;
   s.cash -= cost;
   s.towers.push(t);
+  s.fx.push({ type: 'drop', x, y, t: 0.4, T: 0.4 });
   refresh(s);
   return t;
 }
@@ -150,6 +152,7 @@ export function upgrade(s, t, p) {
   s.cash -= u.price;
   t.spent += u.price;
   t.tiers[p]++;
+  s.fx.push({ type: 'sparkle', x: t.x, y: t.y - 10, t: 0.6, T: 0.6 });
   refresh(s);
   return true;
 }
@@ -220,20 +223,24 @@ export function spawn(s, id, pi, d) {
 const orchardDrop = t => Math.round(t.s.income * t.s.econ / 4);
 function pay(s, t, n) {
   s.cash += n;
-  s.fx.push({ type: 'text', x: t.x, y: t.y - 24, n: `+${n}`, t: 0.9, T: 0.9 });
+  t.anim = 0.3; // flaps its wings
+  s.fx.push({ type: 'text', icon: true, x: t.x, y: t.y - 24, n: `+${n}`, t: 0.9, T: 0.9 });
 }
 
 function endRound(s) {
   s.active = false;
   s.shots = [];
   for (const t of s.towers) if (t.kind === 'orchard') while (t.drops < 4) { t.drops++; pay(s, t, orchardDrop(t)); }
+  const savings = s.cash;
   let interest = 0, eggs = 0;
   for (const t of s.towers) if (t.kind === 'nestegg') {
-    interest += Math.floor(Math.min(t.s.cap, s.cash * t.s.interest) * t.s.econ);
+    const n = Math.floor(Math.min(t.s.cap, savings * t.s.interest) * t.s.econ);
+    if (n) pay(s, t, n);
+    interest += n;
     eggs += t.s.eggs;
   }
   const bonus = 80 + s.round;
-  s.cash += bonus + interest;
+  s.cash += bonus;
   s.eggs += eggs;
   s.events.push({ type: 'round', round: s.round, bonus, interest, eggs });
   if (s.mode === 'campaign' && s.round >= s.map.rounds) { s.over = 'win'; s.events.push({ type: 'win' }); }
@@ -270,6 +277,7 @@ export function hit(s, e, dmg, st) {
   const spot = s.spotters.find(t => dist2(t, e) <= t.s.aura ** 2);
   if (spot) dmg *= 1 + spot.s.spot;
   e.hp -= dmg;
+  e.hitAt = s.time;
   if (e.def.sprint) e.sprint = 0.6;
   if (e.def.fatTail && !e.healed && e.hp > 0 && e.hp < e.max / 2) {
     e.healed = true;
@@ -287,7 +295,7 @@ function kill(s, e) {
   const gain = Math.round(e.def.bounty * (1 + bonus)) + s.flat;
   s.cash += gain;
   if (gain >= 10) s.fx.push({ type: 'text', x: e.x, y: e.y - 10, n: `+${gain}`, t: 0.9, T: 0.9 });
-  s.fx.push({ type: 'poof', x: e.x, y: e.y, t: 0.3, T: 0.3 });
+  s.fx.push({ type: 'poof', id: e.id, x: e.x, y: e.y, t: 0.45, T: 0.45 });
   for (const [id, n] of e.def.spawns || []) for (let i = 0; i < n; i++) spawn(s, id, e.pi, Math.max(0, e.d - i * 5));
 }
 
@@ -341,8 +349,7 @@ function towersAct(s) {
     for (const e of [...s.enemies]) if (dist2(t, e) <= t.s.aura ** 2) hit(s, e, t.s.thorns / 2, t.s);
   }
   for (const t of s.towers) {
-    t.anim = Math.max(0, t.anim - DT);
-    if (t.stun > 0) { t.stun -= DT; continue; }
+    if (t.stun > 0) continue;
     const st = t.s;
     if (!st.rate || (t.cd -= DT) > 0) continue;
     const e = pickTarget(s, t);
@@ -375,6 +382,11 @@ export function step(s) {
   s.time += DT;
   for (const f of s.fx) f.t -= DT;
   s.fx = s.fx.filter(f => f.t > 0);
+  // animation timers keep running between rounds
+  for (const t of s.towers) {
+    t.anim = Math.max(0, t.anim - DT);
+    t.stun = Math.max(0, t.stun - DT);
+  }
   if (s.over || !s.active) return;
   s.qt += DT;
   while (s.queue.length && s.queue[0].t <= s.qt) spawn(s, s.queue.shift().id, s.spawned++ % s.layout.paths.length, 0);

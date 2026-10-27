@@ -12,6 +12,9 @@
 </head>
 <body>
   <main id="title" class="screen">
+    <img class="cloud pixel" data-icon="cloud" alt="">
+    <img class="cloud pixel" data-icon="cloud" alt="">
+    <img class="cloud pixel" data-icon="cloud" alt="">
     <img id="logo" class="pixel" alt="An Eastern Kingbird">
     <h1>Tyrant's Nest</h1>
     <p class="tag">Eastern Kingbirds are small, fierce and fearless. Defend their nest from every reptile on Earth.</p>
@@ -21,12 +24,13 @@
       <button id="btn-roost">The Roost</button>
     </div>
     <p class="feathers"><img class="pixel icon" data-icon="feather" alt=""> <span id="t-feathers">0</span> feathers</p>
-    <div id="cloud-box" class="cloud" hidden>
+    <div id="cloud-box" class="save-box" hidden>
       <p>Cloud save code: <b id="t-code"></b>. Enter it on another device to keep playing there.</p>
       <form id="code-form"><input id="code-in" maxlength="32" placeholder="Save code" aria-label="Save code"> <button>Load</button></form>
       <p id="code-msg" class="small" role="status"></p>
     </div>
     <p id="t-store" class="small"></p>
+    <canvas id="parade" class="pixel" width="320" height="48"></canvas>
   </main>
 
   <main id="levels" class="screen" hidden>
@@ -58,7 +62,7 @@
       <div id="shop"></div>
       <div id="info"></div>
       <div class="controls">
-        <button id="btn-go" class="primary">Start round</button>
+        <button id="btn-go" class="go">Start round</button>
         <button id="btn-speed">Speed 1x</button>
         <button id="btn-menu">Menu</button>
       </div>

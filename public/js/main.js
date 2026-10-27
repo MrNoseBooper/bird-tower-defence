@@ -1,7 +1,7 @@
 // Screens, input and the game loop.
 import { TOWERS, REPTILES, MAPS, ROLE_PERK, PERKS, ROOST_MAX, roostCost } from './data.js';
 import * as sim from './sim.js';
-import { draw, background } from './render.js';
+import { draw, background, drawParade } from './render.js';
 import { towerIcon, iconURL } from './sprites.js';
 import { loadLocal, persist, pull, normalize } from './save.js';
 
@@ -17,7 +17,7 @@ const image = src => { const i = el('img', 'pixel'); i.src = src; i.alt = ''; re
 const setText = (e, v) => { v = String(v); if (e.textContent !== v) e.textContent = v; };
 
 const KINDS = Object.keys(TOWERS);
-const board = $('#board'), ctx = board.getContext('2d');
+const board = $('#board'), ctx = board.getContext('2d'), parade = $('#parade').getContext('2d');
 ctx.imageSmoothingEnabled = false;
 const ui = { placing: null, sel: null, mx: 0, my: 0, hover: false, built: null, last: [0, 'campaign'] };
 let save = loadLocal(), game = null, paused = false, acc = 0, lastFrame = 0;
@@ -334,7 +334,10 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   lastFrame = now;
-  if (!game) return;
+  if (!game) {
+    if (!$('#title').hidden) drawParade(parade, now / 1000);
+    return;
+  }
   if (!paused) for (acc += dt * game.speed; acc >= sim.DT; acc -= sim.DT) sim.step(game);
   draw(ctx, game, ui);
   handleEvents();

@@ -152,15 +152,16 @@ export const ENDLESS_POOL = Object.keys(REPTILES).filter(id => !REPTILES[id].bos
 
 // Blocking radius of each decoration; 0 means towers can sit on it.
 export const DECOR_R = { tree: 7, cypress: 5, bush: 5, rock: 5, flowers: 0, reeds: 3, log: 6, cactus: 4, bones: 0, palm: 6, fern: 4 };
+// grass/path/blocked: [main, dark, light]. sprinkle: tiny flowers or pebbles scattered over the ground.
 export const THEMES = {
-  meadow: { grass: ['#5da13a', '#4f8f31', '#72b84b'], path: ['#c9a266', '#94703f', '#dcbb84'], blocked: ['#3d7fae', '#2e6690', '#7fb9de'], water: true,
-    rock: ['#6b6f78', '#8e939c', '#b9bec6'], decor: ['tree', 'tree', 'bush', 'rock', 'flowers', 'flowers'] },
-  swamp: { grass: ['#4d7a3a', '#3f6a30', '#5f8c47'], path: ['#8c7650', '#5f4f34', '#a38d62'], blocked: ['#3b6b68', '#2b5250', '#6c9f97'], water: true,
-    rock: ['#5a5f58', '#787d74', '#9aa093'], decor: ['cypress', 'cypress', 'reeds', 'log', 'bush'] },
-  canyon: { grass: ['#d9a35f', '#c68e4c', '#e8b977'], path: ['#b06d3c', '#80492a', '#c88552'], blocked: ['#a2522e', '#7a3a20', '#c46d40'], water: false,
-    rock: ['#7a4630', '#a0603f', '#c4805a'], decor: ['cactus', 'cactus', 'rock', 'rock', 'bones'] },
-  amazon: { grass: ['#2f7a36', '#25662c', '#3d8f43'], path: ['#7d5a39', '#573d27', '#957250'], blocked: ['#2d7ea6', '#21628a', '#66b0d6'], water: true,
-    rock: ['#5a6458', '#77826f', '#9aa591'], decor: ['palm', 'palm', 'fern', 'fern', 'flowers', 'tree'] },
+  meadow: { grass: ['#6dc94b', '#5bb33e', '#8fdd66'], path: ['#f0d08e', '#b88446', '#fde6b0'], blocked: ['#4db4ec', '#2f87c2', '#c2ecff'], water: true,
+    rock: ['#7f8895', '#a6afbb', '#dde3ea'], sprinkle: ['#ffffff', '#ffe45c', '#ff8fb8'], decor: ['tree', 'tree', 'bush', 'rock', 'flowers', 'flowers'] },
+  swamp: { grass: ['#62b04a', '#4f963b', '#80c862'], path: ['#c4a56c', '#86693f', '#dcc08a'], blocked: ['#3fb0a2', '#2a8077', '#a8eee2'], water: true,
+    rock: ['#6f7a6c', '#95a091', '#c4cec0'], sprinkle: ['#e9f7b0', '#ffffff', '#c8f07a'], decor: ['cypress', 'cypress', 'reeds', 'log', 'bush'] },
+  canyon: { grass: ['#f5c27c', '#e6aa62', '#ffdb9e'], path: ['#e0904f', '#a95d2c', '#f4ad70'], blocked: ['#d0693d', '#9d4826', '#ee8c58'], water: false,
+    rock: ['#9a5a3a', '#c27a50', '#e8a272'], sprinkle: ['#c98a4f', '#fff0c9', '#b06a3a'], decor: ['cactus', 'cactus', 'rock', 'rock', 'bones'] },
+  amazon: { grass: ['#45b452', '#379a44', '#66cc6a'], path: ['#b5844f', '#7f5634', '#cfa06a'], blocked: ['#3faae6', '#2a80b8', '#aee4ff'], water: true,
+    rock: ['#6b7a68', '#8f9f8b', '#bccbb6'], sprinkle: ['#ff5f6d', '#ffd23f', '#ff9ff3'], decor: ['palm', 'palm', 'fern', 'fern', 'flowers', 'tree'] },
 };
 
 // Each map is a campaign level. Paths are waypoints in the 480x270 board; all paths end at the nest.
